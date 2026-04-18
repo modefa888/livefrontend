@@ -22,6 +22,10 @@ const Tools = () => {
   const [commitMessage, setCommitMessage] = useState('')
   const [isCommitting, setIsCommitting] = useState(false)
   const [isInitializing, setIsInitializing] = useState(false)
+  const [remoteUrl, setRemoteUrl] = useState('')
+  const [isSettingRemote, setIsSettingRemote] = useState(false)
+  const [isPushing, setIsPushing] = useState(false)
+  const [isPulling, setIsPulling] = useState(false)
   
   // 系统状态相关状态
   const [systemStatus, setSystemStatus] = useState(null)
@@ -660,10 +664,76 @@ const Tools = () => {
     })
   }
 
+  // 获取远程仓库配置
+  const fetchRemoteUrl = async () => {
+    try {
+      const response = await api.get(`/api/tools/system/git/remote?type=${gitType}`)
+      setRemoteUrl(response.data.remoteUrl || '')
+    } catch (error) {
+      setRemoteUrl('')
+    }
+  }
+
+  // 设置远程仓库
+  const handleSetRemote = async () => {
+    if (!remoteUrl.trim()) {
+      message.warning('请输入远程仓库地址')
+      return
+    }
+    setIsSettingRemote(true)
+    try {
+      const response = await api.post('/api/tools/system/git/remote', {
+        type: gitType,
+        remoteUrl: remoteUrl
+      })
+      message.success(response.data.message)
+    } catch (error) {
+      message.error('设置远程仓库失败')
+      console.error(error)
+    } finally {
+      setIsSettingRemote(false)
+    }
+  }
+
+  // 推送到远程仓库
+  const handlePush = async () => {
+    setIsPushing(true)
+    try {
+      const response = await api.post('/api/tools/system/git/push', {
+        type: gitType
+      })
+      message.success(response.data.message)
+      fetchGitStatus()
+    } catch (error) {
+      message.error('推送失败')
+      console.error(error)
+    } finally {
+      setIsPushing(false)
+    }
+  }
+
+  // 从远程仓库拉取
+  const handlePull = async () => {
+    setIsPulling(true)
+    try {
+      const response = await api.post('/api/tools/system/git/pull', {
+        type: gitType
+      })
+      message.success(response.data.message)
+      fetchGitStatus()
+    } catch (error) {
+      message.error('拉取失败')
+      console.error(error)
+    } finally {
+      setIsPulling(false)
+    }
+  }
+
   // 当 gitType 变化时，重新获取状态和日志
   useEffect(() => {
     fetchGitStatus()
     fetchGitLog()
+    fetchRemoteUrl()
   }, [gitType])
 
   // 初始化时获取数据
@@ -1322,6 +1392,42 @@ const Tools = () => {
                       }}>
                         {gitStatus.status || '(无更改)'}
                       </pre>
+                    </div>
+                  )}
+                </div>
+                
+                <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f0f7ff', borderRadius: '4px' }}>
+                  <h4>远程仓库</h4>
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                    <Input 
+                      placeholder="输入远程仓库地址 (例如: https://github.com/username/repo.git)"
+                      value={remoteUrl}
+                      onChange={(e) => setRemoteUrl(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <Button 
+                      type="primary" 
+                      onClick={handleSetRemote}
+                      loading={isSettingRemote}
+                    >
+                      设置
+                    </Button>
+                  </div>
+                  {remoteUrl && (
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <Button 
+                        type="primary" 
+                        onClick={handlePush}
+                        loading={isPushing}
+                      >
+                        推送到远程
+                      </Button>
+                      <Button 
+                        onClick={handlePull}
+                        loading={isPulling}
+                      >
+                        从远程拉取
+                      </Button>
                     </div>
                   )}
                 </div>
