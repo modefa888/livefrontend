@@ -1352,43 +1352,43 @@ const Bot = () => {
 
   return (
     <div style={{ padding: '20px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
-        <Button 
-          icon={<ArrowLeftOutlined />} 
-          onClick={() => navigate('/bot')}
-          style={{ marginRight: '16px' }}
-        >
-          返回
-        </Button>
-        <h1 style={{ margin: 0 }}>LiveBot 管理</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <Button 
+            icon={<ArrowLeftOutlined />} 
+            onClick={() => navigate('/bot')}
+            style={{ marginRight: '16px' }}
+          >
+            返回
+          </Button>
+          <h1 style={{ margin: 0 }}>LiveBot 管理</h1>
+        </div>
+        <div>
+          <Button 
+            type="primary" 
+            icon={<PlayCircleOutlined />}
+            onClick={startBot} 
+            disabled={botStatus?.isRunning || livebotLoading}
+            loading={livebotLoading}
+            style={{ marginRight: '10px' }}
+          >
+            启动机器人
+          </Button>
+          <Button 
+            danger 
+            icon={<PauseCircleOutlined />}
+            onClick={stopBot} 
+            disabled={!botStatus?.isRunning || livebotLoading}
+            loading={livebotLoading}
+          >
+            停止机器人
+          </Button>
+        </div>
       </div>
       
       <Tabs 
         defaultActiveKey="status"
         onChange={handleTabChange}
-        tabBarExtraContent={
-          <div>
-            <Button 
-              type="primary" 
-              icon={<PlayCircleOutlined />}
-              onClick={startBot} 
-              disabled={botStatus?.isRunning || livebotLoading}
-              loading={livebotLoading}
-              style={{ marginRight: '10px' }}
-            >
-              启动机器人
-            </Button>
-            <Button 
-              danger 
-              icon={<PauseCircleOutlined />}
-              onClick={stopBot} 
-              disabled={!botStatus?.isRunning || livebotLoading}
-              loading={livebotLoading}
-            >
-              停止机器人
-            </Button>
-          </div>
-        }
       >
 
 

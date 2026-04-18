@@ -277,41 +277,45 @@ function App() {
   ]
 
   // 根据用户权限和权限配置过滤菜单，并动态更新菜单名称
-  const menuItems = user ? allMenuItems.filter(item => {
+  const menuItems = user ? allMenuItems.reduce((acc, item) => {
     // 查找该模块的权限配置
     const modulePermission = permissions.find(perm => perm.path === item.modulePath)
     
-    // 如果没有配置，默认不显示
-    if (!modulePermission) return false
+    // 如果没有配置，也显示（避免缺少权限配置的菜单项不显示）
+    // if (!modulePermission) return acc
     
-    // 只要在权限列表中存在，就允许访问
-    return true
-  }).map(item => {
     // 查找该模块的权限配置，获取动态名称
-    const modulePermission = permissions.find(perm => perm.path === item.modulePath)
     const dynamicLabel = modulePermission ? modulePermission.module : item.label
     
-    // 如果有子菜单，也更新子菜单的名称
+    // 如果有子菜单，也更新子菜单的名称并过滤权限
     if (item.children) {
-      return {
+      // 不过滤权限，显示所有子菜单（避免缺少权限配置的子菜单不显示）
+      const processedChildren = item.children.map(child => {
+        const childPermission = permissions.find(perm => perm.path === child.modulePath)
+        const childLabel = childPermission ? childPermission.module : child.label
+        return {
+          ...child,
+          label: childLabel
+        }
+      })
+      
+      // 即使子菜单为空也显示，除非没有子菜单
+      // if (processedChildren.length === 0) return acc
+      
+      acc.push({
         ...item,
         label: dynamicLabel,
-        children: item.children.map(child => {
-          const childPermission = permissions.find(perm => perm.path === child.modulePath)
-          const childLabel = childPermission ? childPermission.module : child.label
-          return {
-            ...child,
-            label: childLabel
-          }
-        })
-      }
+        children: processedChildren
+      })
+    } else {
+      acc.push({
+        ...item,
+        label: dynamicLabel
+      })
     }
     
-    return {
-      ...item,
-      label: dynamicLabel
-    }
-  }) : []
+    return acc
+  }, []) : []
 
   // 加载中状态 - 检查当前路径，如果是登录页面或独立页面则直接渲染
   if (isLoading || permissionsLoading) {
@@ -457,7 +461,7 @@ const NavigationMenu = ({ menuItems, isLoading }) => {
   const getSelectedKey = () => {
     const path = location.pathname
     
-    // 检查子菜单
+    // 首先检查精确匹配
     for (const item of menuItems) {
       if (item.children) {
         for (const child of item.children) {
@@ -469,6 +473,20 @@ const NavigationMenu = ({ menuItems, isLoading }) => {
         return [item.key]
       }
     }
+    
+    // 如果没有精确匹配，检查 startsWith 匹配（对于像 /bot/fabu 这样的路径，高亮 /bot）
+    for (const item of menuItems) {
+      if (item.children) {
+        for (const child of item.children) {
+          if (path.startsWith(child.path)) {
+            return [child.key]
+          }
+        }
+      } else if (path.startsWith(item.path)) {
+        return [item.key]
+      }
+    }
+    
     return ['dashboard']
   }
   
