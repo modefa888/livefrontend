@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Tabs, Table, Select, Spin, message, Input } from 'antd'
-import { SearchOutlined } from '@ant-design/icons'
+import { Card, Tabs, Table, Select, Spin, message, Input, Switch, Button, Badge, Tag } from 'antd'
+import { SearchOutlined, PauseCircleOutlined, PlayCircleOutlined, DeleteOutlined } from '@ant-design/icons'
 import api from '../utils/api'
 
 const { Option } = Select
@@ -18,6 +18,16 @@ function Logs() {
   const [logType, setLogType] = useState('backend')
   const logContentRef = React.useRef(null)
   const searchInputRef = React.useRef(null)
+  
+  // 实时日志相关状态
+  const [realtimeLogs, setRealtimeLogs] = useState([])
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState(false)
+  const [isRealtimePaused, setIsRealtimePaused] = useState(false)
+  const [realtimeLogType, setRealtimeLogType] = useState('all')
+  const [showTimestamps, setShowTimestamps] = useState(true)
+  const [newLogCount, setNewLogCount] = useState(0)
+  const realtimeLogRef = React.useRef(null)
+  const eventSourceRef = React.useRef(null)
   
   const [loading, setLoading] = useState({
     liveHistory: true,
@@ -144,26 +154,154 @@ function Logs() {
     const handleKeyDown = (e) => {
       if (searchInputRef.current && (document.activeElement === searchInputRef.current || document.activeElement === logContentRef.current)) {
         if (e.key === 'ArrowUp') {
-          e.preventDefault()
-          navigateToPrevMatch()
+          e.preventDefault();
+          navigateToPrevMatch();
         } else if (e.key === 'ArrowDown') {
-          e.preventDefault()
-          navigateToNextMatch()
+          e.preventDefault();
+          navigateToNextMatch();
         }
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keydown', handleKeyDown);
     }
   }, [navigateToPrevMatch, navigateToNextMatch])
+  
+  // 实时日志自动滚动
+  useEffect(() => {
+    if (realtimeLogRef.current && !isRealtimePaused) {
+      const container = realtimeLogRef.current;
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [realtimeLogs, isRealtimePaused])
+  
+  // 组件卸载时清理连接
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    }
+  }, [])
 
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
     return date.toLocaleString('zh-CN');
+  };
+
+  // 连接实时日志（使用fetch + ReadableStream）
+  const connectRealtimeLogs = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/logs/realtime', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`连接失败: ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      
+      // 标记连接成功
+      setIsRealtimeConnected(true);
+      message.success('实时日志连接成功');
+
+      // 读取数据流
+      const readStream = async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  
+                  if (data.type === 'connected') {
+                    console.log('连接成功消息:', data.message);
+                    continue;
+                  }
+                  
+                  if (!isRealtimePaused) {
+                    setRealtimeLogs(prev => {
+                      const newLogs = [...prev, data];
+                      return newLogs.slice(-200); // 只保留最新的200条
+                    });
+                    setNewLogCount(prev => prev + 1);
+                  } else {
+                    setNewLogCount(prev => prev + 1);
+                  }
+                } catch (e) {
+                  // 忽略解析失败的行
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('读取实时日志失败:', e);
+        } finally {
+          setIsRealtimeConnected(false);
+        }
+      };
+      
+      // 保存reader引用
+      eventSourceRef.current = { close: () => reader.cancel() };
+      
+      readStream();
+      
+    } catch (error) {
+      console.error('连接实时日志失败:', error);
+      message.error('连接实时日志失败');
+      setIsRealtimeConnected(false);
+    }
+  };
+
+  // 断开实时日志连接
+  const disconnectRealtimeLogs = () => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+      setIsRealtimeConnected(false);
+      message.info('实时日志连接已断开');
+    }
+  };
+
+  // 清除实时日志
+  const clearRealtimeLogs = () => {
+    setRealtimeLogs([]);
+    setNewLogCount(0);
+  };
+
+  // 获取日志颜色
+  const getLogColor = (content) => {
+    if (content.toLowerCase().includes('error') || content.includes('❌')) {
+      return '#ff4d4f';
+    }
+    if (content.toLowerCase().includes('warn') || content.includes('⚠️')) {
+      return '#faad14';
+    }
+    if (content.toLowerCase().includes('success') || content.includes('✅')) {
+      return '#52c41a';
+    }
+    if (content.toLowerCase().includes('info') || content.includes('ℹ️')) {
+      return '#1890ff';
+    }
+    return '#000';
   };
 
   const liveHistoryColumns = [
@@ -268,6 +406,131 @@ function Logs() {
           ) : (
             <Table columns={sendsColumns} dataSource={sends} rowKey="id" />
           )}
+        </TabPane>
+        
+        <TabPane tab={
+          <span>
+            实时日志
+            {newLogCount > 0 && <Badge count={newLogCount} style={{ marginLeft: 8 }} />}
+          </span>
+        } key="realtime-logs">
+          <Card>
+            <div style={{ marginBottom: 16, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* 连接状态 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Badge 
+                  status={isRealtimeConnected ? 'success' : 'default'} 
+                  text={isRealtimeConnected ? '已连接' : '已断开'} 
+                />
+              </div>
+              
+              {/* 连接/断开按钮 */}
+              {!isRealtimeConnected ? (
+                <Button 
+                  type="primary" 
+                  icon={<PlayCircleOutlined />} 
+                  onClick={connectRealtimeLogs}
+                >
+                  连接
+                </Button>
+              ) : (
+                <Button 
+                  danger
+                  icon={<PauseCircleOutlined />} 
+                  onClick={disconnectRealtimeLogs}
+                >
+                  断开
+                </Button>
+              )}
+              
+              {/* 暂停/恢复按钮 */}
+              {isRealtimeConnected && (
+                <Button 
+                  onClick={() => setIsRealtimePaused(!isRealtimePaused)}
+                  icon={isRealtimePaused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
+                >
+                  {isRealtimePaused ? '继续' : '暂停'}
+                </Button>
+              )}
+              
+              {/* 清除按钮 */}
+              <Button 
+                icon={<DeleteOutlined />} 
+                onClick={clearRealtimeLogs}
+                disabled={realtimeLogs.length === 0}
+              >
+                清除
+              </Button>
+              
+              {/* 日志类型筛选 */}
+              <Select
+                style={{ width: 150 }}
+                value={realtimeLogType}
+                onChange={setRealtimeLogType}
+                options={[
+                  { value: 'all', label: '全部日志' },
+                  { value: 'backend', label: '后端日志' },
+                  { value: 'bot', label: '机器人日志' }
+                ]}
+              />
+              
+              {/* 显示时间戳切换 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>时间戳</span>
+                <Switch 
+                  checked={showTimestamps} 
+                  onChange={setShowTimestamps}
+                />
+              </div>
+            </div>
+            
+            {/* 日志显示区域 */}
+            <div 
+              ref={realtimeLogRef}
+              style={{ 
+                height: '60vh', 
+                overflow: 'auto', 
+                backgroundColor: '#1e1e1e', 
+                color: '#d4d4d4',
+                padding: 16, 
+                borderRadius: 4,
+                fontFamily: 'Consolas, Monaco, Courier New, monospace',
+                fontSize: 13
+              }}
+            >
+              {!isRealtimeConnected && realtimeLogs.length === 0 ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#888' }}>
+                  点击「连接」开始接收实时日志
+                </div>
+              ) : (
+                realtimeLogs
+                  .filter(log => {
+                    if (realtimeLogType === 'all') return true;
+                    return log.type === realtimeLogType;
+                  })
+                  .map((log, index) => (
+                    <div key={index} style={{ marginBottom: 4, lineHeight: 1.6 }}>
+                      <span style={{ display: 'inline-flex', gap: 8 }}>
+                        {showTimestamps && (
+                          <span style={{ color: '#6a9955', fontSize: 12 }}>
+                            [{new Date(log.timestamp).toLocaleTimeString()}]
+                          </span>
+                        )}
+                        <Tag 
+                          color={log.type === 'backend' ? 'blue' : 'purple'} 
+                          style={{ marginRight: 8, fontSize: 11 }}
+                        >
+                          {log.type === 'backend' ? '后端' : '机器人'}
+                        </Tag>
+                        <span style={{ color: getLogColor(log.content) }}>
+                          {log.content}
+                        </span>
+                      </span>
+                    </div>
+                  ))
+              )}
+            </div>
+          </Card>
         </TabPane>
         
         <TabPane tab="日志文件" key="log-files">

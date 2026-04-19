@@ -4,7 +4,7 @@ import api from '../utils/api'
 
 const { TabPane } = Tabs
 
-function Login({ setUser }) {
+function Login({ setUser, user }) {
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('login')
   const [captchaSrc, setCaptchaSrc] = useState('')
@@ -45,6 +45,18 @@ function Login({ setUser }) {
 
   // 组件加载时生成验证码并检查URL参数
   useEffect(() => {
+    // 如果用户已登录，直接跳转到 dashboard
+    if (user) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const redirect = urlParams.get('redirect');
+      if (redirect) {
+        window.location.href = redirect;
+      } else {
+        window.location.href = '/dashboard';
+      }
+      return;
+    }
+    
     generateCaptcha()
     
     // 检查URL参数，处理自动登录
@@ -60,7 +72,7 @@ function Login({ setUser }) {
       // 旧方式：使用 userId 和 username 登录
       handleAutoLogin(userId, username);
     }
-  }, [activeTab])
+  }, [activeTab, user])
 
   // 处理 token 登录
   const handleTokenLogin = async (token) => {

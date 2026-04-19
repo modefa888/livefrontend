@@ -335,11 +335,21 @@ function App() {
     
     // 检查是否是登录页面
     if (currentPath.startsWith('/login')) {
+      // 如果有token，直接跳转到dashboard
+      if (localStorage.getItem('token')) {
+        return (
+          <Router>
+            <Routes>
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+            </Router>
+        )
+      }
       return (
         <Router>
           <Routes>
-            <Route path="/login" element={<Login setUser={setUser} />} />
-            <Route path="/login/*" element={<Login setUser={setUser} />} />
+            <Route path="/login" element={<Login setUser={setUser} user={user} />} />
+            <Route path="/login/*" element={<Login setUser={setUser} user={user} />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </Router>
@@ -597,8 +607,8 @@ const NavigationMenu = ({ menuItems, isLoading }) => {
         <Route path="/v/:path" element={<PageView />} />
         
         {/* 登录页面路由 */}
-        <Route path="/login" element={<Login setUser={setUser} />} />
-        <Route path="/login/*" element={<Login setUser={setUser} />} />
+        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login setUser={setUser} user={user} />} />
+        <Route path="/login/*" element={user ? <Navigate to="/dashboard" replace /> : <Login setUser={setUser} user={user} />} />
         
         {/* 管理后台路由 */}
         <Route path="/*" element={
@@ -679,8 +689,8 @@ const NavigationMenu = ({ menuItems, isLoading }) => {
             </Layout>
           ) : (
             <Routes>
-              <Route path="/login" element={<Login setUser={setUser} />} />
-              <Route path="/login/*" element={<Login setUser={setUser} />} />
+              <Route path="/login" element={<Login setUser={setUser} user={user} />} />
+              <Route path="/login/*" element={<Login setUser={setUser} user={user} />} />
               <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
           )

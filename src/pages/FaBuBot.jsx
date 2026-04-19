@@ -2746,6 +2746,7 @@ const FaBuBot = () => {
                             width: 100,
                             render: (type) => {
                               const typeMap = {
+                                porn: '色情',
                                 spam: '垃圾',
                                 advertisement: '广告',
                                 insult: '辱骂',
@@ -3217,6 +3218,7 @@ const FaBuBot = () => {
             initialValue="other"
           >
             <Select>
+              <Option value="porn">色情</Option>
               <Option value="spam">垃圾</Option>
               <Option value="advertisement">广告</Option>
               <Option value="insult">辱骂</Option>
