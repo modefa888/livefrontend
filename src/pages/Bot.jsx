@@ -302,10 +302,9 @@ const Bot = () => {
   
   // 启动机器人
   const startBot = async () => {
-    // 检查代理状态
+    // 警告用户代理不可用，但不阻止启动
     if (envConfig?.proxy && proxyStatus && !proxyStatus.success) {
-      message.error('代理不可用，请检查代理配置后再尝试')
-      return
+      message.warning('代理检测失败，但仍将尝试启动机器人')
     }
 
     setLivebotLoading(true)
@@ -723,6 +722,11 @@ const Bot = () => {
       await api.put(`/api/config/environments/${envName}`, values);
       message.success('环境配置更新成功');
       setEnvChanged(false);
+      // 如果当前环境是刚更新的环境，并且有代理配置，自动检测代理
+      if (envName === currentEnvironment && values.proxy) {
+        // 先重新获取环境配置，再检测代理
+        await fetchEnvConfig();
+      }
     } catch (error) {
       message.error('环境配置更新失败');
       console.error('环境配置更新失败:', error);
@@ -774,6 +778,9 @@ const Bot = () => {
     try {
       await api.put('/api/config/current-env', { environment: value });
       setCurrentEnvironment(value);
+      // 切换环境后重新获取环境配置并重置代理状态
+      setProxyStatus(null);
+      await fetchEnvConfig();
       message.success('当前环境更新成功');
     } catch (error) {
       message.error('当前环境更新失败');
@@ -1399,7 +1406,6 @@ const Bot = () => {
             <Card title="⚙️ 机器人状态" extra={<Button icon={<ReloadOutlined />} onClick={toggleAutoRefresh} loading={refreshLoading} type={autoRefresh ? 'primary' : 'default'}>{autoRefresh ? `停止自动刷新 (${countdown}s)` : '启动自动刷新 (30s)'}</Button>}>  
               <div style={{ fontSize: '16px', lineHeight: '2' }}>
                 <p><strong>运行状态:</strong> {botStatus?.isRunning ? '✅ 运行中' : '❌ 已停止'}</p>
-                {botStatus?.error && <p><strong>错误信息:</strong> <span style={{ color: 'red' }}>{botStatus.error}</span></p>}
                 
                 <div style={{ marginTop: '20px', padding: '10px', background: '#f5f5f5', borderRadius: '4px' }}>
                   <h3 style={{ marginBottom: '10px' }}>🌐 环境配置</h3>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom'
 import { Layout, Menu, Button, Dropdown, Avatar, message, Spin } from 'antd'
-import { HomeOutlined, UserOutlined, SettingOutlined, MonitorOutlined, LogoutOutlined, UserAddOutlined, TeamOutlined, FileTextOutlined, MessageOutlined, RobotOutlined, BugOutlined, ToolOutlined, VideoCameraOutlined, BellOutlined } from '@ant-design/icons'
+import { HomeOutlined, UserOutlined, SettingOutlined, MonitorOutlined, LogoutOutlined, UserAddOutlined, TeamOutlined, FileTextOutlined, MessageOutlined, RobotOutlined, BugOutlined, ToolOutlined, VideoCameraOutlined, BellOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
 import api from './utils/api'
 import { BotLoadingProvider } from './contexts/BotLoadingContext'
 
@@ -41,6 +41,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [permissions, setPermissions] = useState([])
   const [permissionsLoading, setPermissionsLoading] = useState(true)
+  const [siderCollapsed, setSiderCollapsed] = useState(false) // 侧边栏折叠状态
 
   // 检查用户登录状态
   useEffect(() => {
@@ -281,16 +282,19 @@ function App() {
     // 查找该模块的权限配置
     const modulePermission = permissions.find(perm => perm.path === item.modulePath)
     
-    // 如果没有配置，也显示（避免缺少权限配置的菜单项不显示）
-    // if (!modulePermission) return acc
+    // 如果没有找到权限配置，就不显示该菜单项
+    if (!modulePermission) return acc
     
     // 查找该模块的权限配置，获取动态名称
     const dynamicLabel = modulePermission ? modulePermission.module : item.label
     
     // 如果有子菜单，也更新子菜单的名称并过滤权限
     if (item.children) {
-      // 不过滤权限，显示所有子菜单（避免缺少权限配置的子菜单不显示）
-      const processedChildren = item.children.map(child => {
+      // 过滤没有权限的子菜单
+      const processedChildren = item.children.filter(child => {
+        const childPermission = permissions.find(perm => perm.path === child.modulePath)
+        return childPermission
+      }).map(child => {
         const childPermission = permissions.find(perm => perm.path === child.modulePath)
         const childLabel = childPermission ? childPermission.module : child.label
         return {
@@ -299,8 +303,8 @@ function App() {
         }
       })
       
-      // 即使子菜单为空也显示，除非没有子菜单
-      // if (processedChildren.length === 0) return acc
+      // 如果子菜单为空，就不显示该父菜单项
+      if (processedChildren.length === 0) return acc
       
       acc.push({
         ...item,
@@ -387,6 +391,7 @@ function App() {
             <Sider 
               className="sider" 
               width={220}
+              collapsed={siderCollapsed}
               style={{
                 position: 'fixed',
                 left: 0,
@@ -453,7 +458,7 @@ function App() {
                 `}</style>
               </div>
             </Sider>
-            <Content className="content" style={{ marginLeft: 220, overflow: 'auto' }}>
+            <Content className="content" style={{ marginLeft: siderCollapsed ? 80 : 220, overflow: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>加载中...</div>
             </Content>
           </Layout>
@@ -616,7 +621,15 @@ const NavigationMenu = ({ menuItems, isLoading }) => {
             <Layout className="app-container">
               <Header className="header">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '100%' }}>
-                  <div style={{ fontSize: '18px', fontWeight: '600', color: '#1890ff' }}>LiveBot 管理后台</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <Button 
+                      type="text" 
+                      icon={siderCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} 
+                      onClick={() => setSiderCollapsed(!siderCollapsed)}
+                      style={{ fontSize: '16px' }}
+                    />
+                    <div style={{ fontSize: '18px', fontWeight: '600', color: '#1890ff' }}>LiveBot 管理后台</div>
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     <span style={{ marginRight: '16px' }}>{user.username}</span>
                     <Dropdown
@@ -645,6 +658,7 @@ const NavigationMenu = ({ menuItems, isLoading }) => {
                 <Sider 
                   className="sider" 
                   width={220}
+                  collapsed={siderCollapsed}
                   style={{
                     position: 'fixed',
                     left: 0,
@@ -657,7 +671,7 @@ const NavigationMenu = ({ menuItems, isLoading }) => {
                 >
                   <NavigationMenu menuItems={menuItems} isLoading={permissionsLoading} />
                 </Sider>
-                <Content className="content" style={{ marginLeft: 220, overflow: 'auto' }}>
+                <Content className="content" style={{ marginLeft: siderCollapsed ? 80 : 220, overflow: 'auto' }}>
                   <Routes>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<Dashboard />} />
