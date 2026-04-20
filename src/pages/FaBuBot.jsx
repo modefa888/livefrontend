@@ -1019,6 +1019,9 @@ const FaBuBot = () => {
         case 'reports':
           fetchGroupReports(currentGroup.group_id)
           break
+        case 'special':
+          // 特殊功能Tab不需要额外加载数据
+          break
       }
     }
   }
@@ -3035,6 +3038,42 @@ const FaBuBot = () => {
                       ]}
                     />
                   </Spin>
+                )
+              },
+              {
+                key: 'special',
+                label: '特殊功能',
+                children: (
+                  <Card size="small">
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <span style={{ fontWeight: 'bold' }}>多群组转发</span>
+                        <Switch
+                          checked={currentGroup.is_forward_enabled || false}
+                          onChange={async (checked) => {
+                            try {
+                              await api.put(`/api/fabu-bot/groups/${currentGroup.group_id}/forward-toggle`, {
+                                enabled: checked
+                              });
+                              message.success(checked ? '已开启转发，当前群组已添加到转发目标' : '已关闭转发，当前群组已从转发目标移除');
+                              await fetchGroupDetails(currentGroup.group_id);
+                            } catch (error) {
+                              message.error('更新失败');
+                              console.error(error);
+                            }
+                          }}
+                        />
+                      </div>
+                      
+                      <Alert
+                        message="提示"
+                        description="开启后，当前群组将被添加到转发目标列表中，所有群保存的媒体内容都将自动转发到此群组。关闭后，当前群组将从转发目标列表中移除。"
+                        type="info"
+                        showIcon
+                        style={{ marginTop: '16px' }}
+                      />
+                    </div>
+                  </Card>
                 )
               },
               {
