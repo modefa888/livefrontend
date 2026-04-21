@@ -78,14 +78,17 @@ function Login({ setUser, user }) {
   const handleTokenLogin = async (token) => {
     setLoading(true);
     try {
+      // 先存储 token 到 localStorage，这样 api 拦截器会自动添加到请求头
+      localStorage.setItem('token', token);
+      
       // 验证 token 是否有效
       const response = await api.get('/api/auth/me');
       
       if (response.data) {
-        // 存储 token 并设置用户信息
-        localStorage.setItem('token', token);
+        // 设置用户信息
         setUser({
           id: response.data.id,
+          userId: response.data.userId,
           username: response.data.username,
           permissionLevel: response.data.permissionLevel
         });

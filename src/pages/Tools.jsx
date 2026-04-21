@@ -1058,6 +1058,10 @@ const Tools = () => {
                       <span style={{ marginRight: '8px' }}>🔒</span>
                       package-lock.json
                     </li>
+                    <li style={{ marginBottom: '5px', display: 'flex', alignItems: 'center' }}>
+                      <span style={{ marginRight: '8px' }}>📁</span>
+                      .git
+                    </li>
                   </ul>
                   
                   <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
@@ -1214,6 +1218,10 @@ const Tools = () => {
                     <li style={{ marginBottom: '5px', display: 'flex', alignItems: 'center' }}>
                       <span style={{ marginRight: '8px' }}>🔒</span>
                       package-lock.json
+                    </li>
+                    <li style={{ marginBottom: '5px', display: 'flex', alignItems: 'center' }}>
+                      <span style={{ marginRight: '8px' }}>📁</span>
+                      .git
                     </li>
                   </ul>
                   

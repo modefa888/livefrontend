@@ -28,25 +28,34 @@ const Spider = () => {
   const [localScriptsLoading, setLocalScriptsLoading] = useState(false)
   const [isLocalScriptsModalVisible, setIsLocalScriptsModalVisible] = useState(false)
   const [searchUrl, setSearchUrl] = useState('')
+  // 代理检测相关状态
+  const [proxyStatus, setProxyStatus] = useState(null)
+  const [checkingProxy, setCheckingProxy] = useState(false)
+  const [proxyUrl, setProxyUrl] = useState('')
+
+  // 表单实例
+  const [form] = Form.useForm()
+  const [scriptForm] = Form.useForm()
+  const [formLoading, setFormLoading] = useState(false)
 
   // 预处理测试结果数据，只保留有数据的字段
   const processedTestData = useMemo(() => {
-    if (!scriptTestResult?.data) return [];
+    if (!scriptTestResult?.data) return []
     
-    const data = scriptTestResult.data;
-    const fields = [];
+    const data = scriptTestResult.data
+    const fields = []
     
     if (data.title) {
-      fields.push({ label: '标题', value: data.title });
+      fields.push({ label: '标题', value: data.title })
     }
     if (data.username) {
-      fields.push({ label: '主播', value: data.username });
+      fields.push({ label: '主播', value: data.username })
     }
     if (data.room_status !== undefined) {
-      fields.push({ label: '直播状态', value: data.room_status === 1 ? '🟢 直播中' : '🔴 未直播' });
+      fields.push({ label: '直播状态', value: data.room_status === 1 ? '🟢 直播中' : '🔴 未直播' })
     }
     if (data.avatar_thumb) {
-      fields.push({ label: '主播头像', value: <img src={data.avatar_thumb} alt="主播头像" style={{ width: '80px', height: '80px', borderRadius: '4px' }} /> });
+      fields.push({ label: '主播头像', value: <img src={data.avatar_thumb} alt="主播头像" style={{ width: '80px', height: '80px', borderRadius: '4px' }} /> })
     }
     if (data.liveUrl) {
       fields.push({ 
@@ -58,7 +67,6 @@ const Spider = () => {
               target="_blank" 
               rel="noopener noreferrer"
               style={{
-                display: 'block',
                 width: '100%',
                 maxHeight: '48px',
                 overflow: 'hidden',
@@ -88,28 +96,27 @@ const Spider = () => {
           </div>
         ),
         span: 2
-      });
+      })
     }
     if (data.targetUrl) {
       fields.push({ 
-        label: '直播间链接', 
+        label: '直播间URL', 
         value: (
           <a href={data.targetUrl} target="_blank" rel="noopener noreferrer" className="ant-btn ant-btn-primary">
             跳转到直播间
           </a>
         ),
         span: 2
-      });
+      })
     }
     
-    return fields;
-  }, [scriptTestResult]);
+    return fields
+  }, [scriptTestResult])
 
   // 获取爬虫配置列表
   const fetchSpiders = async () => {
     setLoading(true)
     try {
-      
       const response = await api.get('/api/spider/configs')
       setSpiders(response.data)
     } catch (error) {
@@ -120,18 +127,55 @@ const Spider = () => {
     }
   }
 
-  // 表单提交加载状态
-  const [formLoading, setFormLoading] = useState(false)
-  
-  // 本地状态管理
-  const [formInstance, setFormInstance] = useState(null)
-  const [scriptFormInstance, setScriptFormInstance] = useState(null)
+  // 获取环境配置（包括代理）
+  const fetchEnvConfig = async () => {
+    try {
+      const response = await api.get('/api/spider/config')
+      setProxyUrl(response.data.proxy || '')
+      // 自动检测代理
+      if (response.data.proxy) {
+        checkProxyStatus(response.data.proxy)
+      }
+    } catch (error) {
+      console.error('获取环境配置失败:', error)
+    }
+  }
+
+  // 检测代理状态
+  const checkProxyStatus = async (proxyUrlToCheck = proxyUrl) => {
+    if (!proxyUrlToCheck) {
+      message.warning('请先配置代理地址')
+      return
+    }
+    
+    setCheckingProxy(true)
+    try {
+      const response = await api.post('/api/spider/check-proxy', {
+        proxyUrl: proxyUrlToCheck
+      })
+      setProxyStatus(response.data)
+      if (response.data.success) {
+        message.success('代理检测成功')
+      } else {
+        message.error(`代理检测失败: ${response.data.error || response.data.message}`)
+      }
+    } catch (error) {
+      console.error('代理检测失败:', error)
+      message.error('代理检测失败')
+    } finally {
+      setCheckingProxy(false)
+    }
+  }
+
+  // 页面加载时获取环境配置
+  useEffect(() => {
+    fetchEnvConfig()
+  }, [])
 
   // 添加爬虫
   const handleAddSpider = async (values) => {
     try {
       setFormLoading(true)
-      // 将 interval 转换为数字
       const processedValues = {
         ...values,
         interval: parseInt(values.interval, 10)
@@ -140,7 +184,7 @@ const Spider = () => {
       await api.post('/api/spider/add', processedValues)
       message.success('爬虫添加成功')
       setIsModalVisible(false)
-      formInstance?.resetFields()
+      form.resetFields()
       fetchSpiders()
     } catch (error) {
       message.error('添加爬虫失败')
@@ -154,7 +198,6 @@ const Spider = () => {
   const handleUpdateSpider = async (values) => {
     try {
       setFormLoading(true)
-      // 将 interval 转换为数字
       const processedValues = {
         ...values,
         interval: parseInt(values.interval, 10)
@@ -163,7 +206,7 @@ const Spider = () => {
       await api.put(`/api/spider/${editingSpider.id}`, processedValues)
       message.success('爬虫更新成功')
       setIsModalVisible(false)
-      formInstance?.resetFields()
+      form.resetFields()
       setEditingSpider(null)
       fetchSpiders()
     } catch (error) {
@@ -191,7 +234,6 @@ const Spider = () => {
       cancelText: '取消',
       onOk: async () => {
         try {
-          
           await api.delete(`/api/spider/${spiderId}`)
           message.success('爬虫配置删除成功')
           fetchSpiders()
@@ -207,11 +249,9 @@ const Spider = () => {
   const startAllSpiders = async () => {
     try {
       setStartAllLoading(true)
-      
       await api.post('/api/spider/start-all', {})
       message.success('所有爬虫已启动')
       setSpidersRunning(true)
-      // 执行成功后刷新页面
       fetchSpiders()
     } catch (error) {
       message.error('启动爬虫失败')
@@ -225,11 +265,9 @@ const Spider = () => {
   const stopAllSpiders = async () => {
     try {
       setStopAllLoading(true)
-      
       await api.post('/api/spider/stop-all', {})
       message.success('所有爬虫已停止')
       setSpidersRunning(false)
-      // 执行成功后刷新页面
       fetchSpiders()
     } catch (error) {
       message.error('停止爬虫失败')
@@ -239,7 +277,7 @@ const Spider = () => {
     }
   }
 
-  // 切换爬虫状态（启动/停止）
+  // 切换所有爬虫状态
   const toggleAllSpiders = () => {
     if (spidersRunning) {
       stopAllSpiders()
@@ -252,21 +290,20 @@ const Spider = () => {
   const showScriptModal = async (spider) => {
     try {
       setEditingScript(spider)
-      // 获取脚本内容
+      setScriptTestResult(null)
+      setActiveTabKey('script')
       
       const response = await api.get(`/api/spider/script/${spider.name}`)
-      scriptFormInstance?.setFieldsValue({ script: response.data.script })
-      // 设置测试关键字为数据库中的值
-      setTestKeyword(spider.testKeyword || '1')
-      setScriptTestResult(null)
+      
+      scriptForm.setFieldsValue({ script: response.data.script || '' })
+      setTestKeyword(response.data.testKeyword || '1')
+      
       setIsScriptModalVisible(true)
     } catch (error) {
       message.error('获取脚本内容失败')
       console.error(error)
-      // 如果获取失败，显示空脚本
-      scriptFormInstance?.setFieldsValue({ script: '' })
-      // 设置测试关键字为数据库中的值
-      setTestKeyword(spider.testKeyword || '1')
+      scriptForm.setFieldsValue({ script: '' })
+      setTestKeyword('1')
       setIsScriptModalVisible(true)
     }
   }
@@ -279,11 +316,12 @@ const Spider = () => {
       
       await api.post('/api/spider/script', {
         site: editingScript.name,
-        script
+        script,
+        testKeyword
       })
       message.success('脚本保存成功')
       setIsScriptModalVisible(false)
-      scriptFormInstance?.resetFields()
+      scriptForm.resetFields()
       setEditingScript(null)
       setScriptChanged(false)
     } catch (error) {
@@ -298,17 +336,15 @@ const Spider = () => {
   const handleTestScript = async () => {
     try {
       setTestLoading(true)
-      const scriptContent = scriptFormInstance?.getFieldValue('script')
+      const scriptContent = scriptForm.getFieldValue('script')
       
-      // 测试脚本
       const response = await api.post('/api/spider/test', {
         script: scriptContent,
-        mid: testKeyword, // 使用用户输入的测试关键字
-        proxy: '' // 不使用代理
+        mid: testKeyword,
+        proxy: ''
       })
       setScriptTestResult(response.data)
       setTestLoading(false)
-      // 自动切换到测试结果标签页
       setActiveTabKey('test')
       if (response.data.success) {
         message.success('脚本测试成功')
@@ -317,7 +353,6 @@ const Spider = () => {
       }
     } catch (error) {
       setTestLoading(false)
-      // 自动切换到测试结果标签页
       setActiveTabKey('test')
       message.error('测试脚本失败')
       console.error(error)
@@ -327,74 +362,29 @@ const Spider = () => {
   // 打开编辑模态框
   const showEditModal = (spider) => {
     setEditingSpider(spider)
-    // 将 crawlInterval 映射到 interval
+    setActiveTabKey('basic')
     const formValues = {
       ...spider,
       interval: spider.crawlInterval,
       testKeyword: spider.testKeyword || '',
       callFunction: spider.callFunction || ''
     }
-    formInstance?.setFieldsValue(formValues)
     setIsModalVisible(true)
+    setTimeout(() => {
+      form.setFieldsValue(formValues)
+    }, 0)
   }
 
   // 打开添加模态框
   const showAddModal = () => {
     setEditingSpider(null)
-    formInstance?.resetFields()
+    form.resetFields()
     setIsModalVisible(true)
-  }
-
-  // 当表单打开时，对于编辑模式，如果是从本地脚本添加的，重新获取脚本内容
-  useEffect(() => {
-    if (isModalVisible && editingSpider) {
-      // 尝试从本地脚本获取最新的脚本内容
-      const fetchScriptContent = async () => {
-        try {
-          
-          const scriptResponse = await api.get(`http://localhost:3001/api/spider/script/${editingSpider.name}`)
-          
-          const scriptContent = scriptResponse.data.script || ''
-          if (scriptContent) {
-            formInstance?.setFieldsValue({ scriptContent })
-          }
-        } catch (error) {
-          console.error('获取脚本内容失败:', error)
-        }
-      }
-      
-      fetchScriptContent()
-    }
-  }, [isModalVisible, editingSpider, formInstance])
-
-  // 上传脚本到数据库
-  const uploadScriptsToDatabase = async () => {
-    try {
-      setUploadLoading(true)
-      
-      // 首先获取爬虫配置列表
-      const configsResponse = await api.get('/api/spider/configs')
-      
-      // 然后将配置列表上传到数据库
-      const uploadResponse = await api.post('/api/spider/upload-to-db', {
-        configs: configsResponse.data
-      })
-      
-      message.success(uploadResponse.data.message || '脚本上传成功')
-      fetchSpiders()
-    } catch (error) {
-      message.error('上传脚本失败')
-      console.error(error)
-    } finally {
-      setUploadLoading(false)
-    }
   }
 
   // 切换爬虫状态
   const handleToggleSpider = async (spiderName, isEnabled) => {
     try {
-      
-      // 转换 isEnabled 为数字 1 或 0
       const enabledValue = isEnabled ? 1 : 0
       await api.put(`/api/spider/toggle/${spiderName}`, {
         isEnabled: enabledValue
@@ -412,17 +402,12 @@ const Spider = () => {
     try {
       setLocalScriptsLoading(true)
       
-      
-      // 获取本地脚本列表
       const scriptsResponse = await api.get('/api/spider/local-scripts')
-      
-      // 获取数据库中已有的爬虫配置
       const configsResponse = await api.get('/api/spider/configs')
       
       const localScripts = scriptsResponse.data
       const dbConfigs = configsResponse.data
       
-      // 标记已存在的脚本
       const scriptsWithStatus = localScripts.map(script => {
         const exists = dbConfigs.some(config => config.name === script.name)
         return {
@@ -446,33 +431,24 @@ const Spider = () => {
     try {
       console.log('Adding spider from local:', script)
       
-      // 从文件名提取脚本名称（去掉 .js 扩展名）
       const scriptFileName = script.file.replace('.js', '');
       
-      // 获取脚本内容 - 使用脚本的名称（getModuleName() 返回的名称）
-      
-      const scriptResponse = await api.get(`http://localhost:3001/api/spider/script/${script.name}`)
+      const scriptResponse = await api.get(`/api/spider/script/${script.name}`)
       
       const scriptContent = scriptResponse.data.script || ''
       
-      // 填充表单数据
-      formInstance?.setFieldsValue({
+      form.setFieldsValue({
         name: script.name,
         type: 'live',
         url: script.host,
         interval: script.interval || 300,
         isEnabled: true,
-        createScript: false, // 不要创建脚本文件，因为已经存在
+        createScript: false,
         scriptContent: scriptContent
       })
       
-      // 关闭本地脚本模态框
       setIsLocalScriptsModalVisible(false)
-      
-      // 显示添加爬虫模态框
       setIsModalVisible(true)
-      
-      // 重置编辑状态
       setEditingSpider(null)
     } catch (error) {
       console.error('Error adding spider:', error)
@@ -542,21 +518,73 @@ const Spider = () => {
   ]
 
   // 过滤后的爬虫列表
-  const filteredSpiders = spiders.filter(spider => {
-    if (!searchUrl) return true
-    return spider.url.toLowerCase().includes(searchUrl.toLowerCase())
-  })
+  const filteredSpiders = useMemo(() => {
+    if (!searchUrl) return spiders
+    return spiders.filter(spider => 
+      spider.url.toLowerCase().includes(searchUrl.toLowerCase())
+    )
+  }, [spiders, searchUrl])
 
-  // 添加/编辑爬虫模态框组件
-  const SpiderModal = () => {
-    const [form] = Form.useForm()
-    
-    // 当模态框打开时，设置form实例
-    useEffect(() => {
-      setFormInstance(form)
-    }, [])
-    
-    return (
+  return (
+    <div style={{ padding: '20px' }}>
+      <h1 style={{ marginBottom: '20px' }}>爬虫管理</h1>
+      
+      {/* 代理检测区域 */}
+      <Card style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ marginRight: '10px', fontWeight: 'bold' }}>📍 代理地址:</span>
+          <span style={{ marginRight: '10px', flex: 1 }}>{proxyUrl || '未配置'}</span>
+          <Button 
+            type="link" 
+            onClick={() => checkProxyStatus()} 
+            loading={checkingProxy}
+          >
+            检测
+          </Button>
+          {proxyStatus && (
+            <span style={{ marginLeft: '10px', color: proxyStatus.success ? '#52c41a' : '#ff4d4f' }}>
+              {proxyStatus.success ? '✅ 可用' : '❌ 不可用'}
+            </span>
+          )}
+        </div>
+        {proxyStatus && proxyStatus.error && (
+          <div style={{ color: '#ff4d4f', marginTop: '8px', fontSize: '12px' }}>
+            错误: {proxyStatus.error}
+          </div>
+        )}
+      </Card>
+      
+      <div style={{ marginBottom: '20px' }}>
+        <Button type="primary" onClick={showAddModal} style={{ marginRight: '10px' }}>
+          添加爬虫
+        </Button>
+        <Button 
+          type={spidersRunning ? 'default' : 'primary'} 
+          onClick={toggleAllSpiders} 
+          style={{ marginRight: '10px' }} 
+          loading={startAllLoading || stopAllLoading}
+        >
+          {spidersRunning ? '停止所有爬虫' : '启动所有爬虫'}
+        </Button>
+        <Button type="default" onClick={showLocalScriptsModal} style={{ marginRight: '10px' }}>
+          从本地添加脚本
+        </Button>
+        <Input 
+          placeholder="搜索URL" 
+          value={searchUrl} 
+          onChange={(e) => setSearchUrl(e.target.value)} 
+          style={{ width: '300px', marginLeft: '10px' }} 
+          prefix={<SearchOutlined />}
+        />
+      </div>
+
+      <Spin spinning={loading}>
+        <Card title="爬虫配置列表">
+          <Table columns={columns} dataSource={filteredSpiders} rowKey="id" />
+        </Card>
+      </Spin>
+
+      {/* 添加/编辑爬虫模态框 */}
       <Modal
         title={editingSpider ? '编辑爬虫' : '添加爬虫'}
         open={isModalVisible}
@@ -656,11 +684,13 @@ const Spider = () => {
             </TabPane>
             <TabPane tab="脚本编辑" key="script">
               <Form.Item
-                name="scriptContent"
                 label="脚本代码"
                 rules={[{ required: true, message: '请输入脚本代码' }]}
-                initialValue={
-`// 爬虫脚本模板
+              >
+                <Editor
+                  height="500px"
+                  defaultLanguage="javascript"
+                  value={form.getFieldValue('scriptContent') || `// 爬虫脚本模板
 const includes = require('../config/includes');
 const cheerio = require('cheerio');
 
@@ -689,7 +719,7 @@ const getStationStatus = async (mid, proxy) => {
     title = $('title').text().trim();
     
     // 示例：获取主播名称
-    // username = $('.anchor-info .name').text().trim();
+    // username = $('.anchor-info .name).text().trim();
     
     // 示例：获取直播状态
     // const liveStatusElement = $('.live-status');
@@ -721,13 +751,15 @@ module.exports = {
   getMidCount() {
     return 300;
   }
-}`}
-              >
-                <Editor
-                  height="500px"
-                  defaultLanguage="javascript"
-                  value={form.getFieldValue('scriptContent') || ''}
+};`}
                   onChange={(value) => form.setFieldsValue({ scriptContent: value })}
+                  theme="vs-dark"
+                  options={{
+                    minimap: { enabled: true },
+                    fontSize: 14,
+                    fontLigatures: true,
+                    automaticLayout: true,
+                  }}
                 />
               </Form.Item>
             </TabPane>
@@ -741,19 +773,8 @@ module.exports = {
           </Form.Item>
         </Form>
       </Modal>
-    )
-  }
 
-  // 编辑脚本模态框组件
-  const ScriptModal = () => {
-    const [scriptForm] = Form.useForm()
-    
-    // 当模态框打开时，设置scriptForm实例
-    useEffect(() => {
-      setScriptFormInstance(scriptForm)
-    }, [])
-    
-    return (
+      {/* 编辑脚本模态框 */}
       <Modal
         title={editingScript ? `编辑爬虫脚本 - ${editingScript.name}` : '编辑爬虫脚本'}
         open={isScriptModalVisible}
@@ -780,10 +801,17 @@ module.exports = {
                 <Editor
                   height="500px"
                   defaultLanguage="javascript"
-                  value={scriptForm.getFieldValue('script')}
+                  value={scriptForm.getFieldValue('script') || ''}
                   onChange={(value) => {
                     scriptForm.setFieldsValue({ script: value });
                     setScriptChanged(true);
+                  }}
+                  theme="vs-dark"
+                  options={{
+                    minimap: { enabled: true },
+                    fontSize: 14,
+                    fontLigatures: true,
+                    automaticLayout: true,
                   }}
                 />
               </Form.Item>
@@ -801,7 +829,7 @@ module.exports = {
                 <div style={{ textAlign: 'right' }}>
                   <Button 
                     type="primary" 
-                    onClick={() => scriptForm.submit()} 
+                    htmlType="submit"
                     loading={saveLoading}
                     style={{ marginRight: '8px' }}
                   >
@@ -828,7 +856,6 @@ module.exports = {
                     <div style={{ marginTop: '16px' }}>
                       <h4>爬取结果</h4>
                       <Descriptions bordered column={2}>
-                        {/* 使用预处理后的数据渲染，只显示有数据的字段 */}
                         {processedTestData.map((field, index) => (
                           <Descriptions.Item 
                             key={index} 
@@ -858,48 +885,6 @@ module.exports = {
           </Tabs>
         </Form>
       </Modal>
-    )
-  }
-
-  return (
-    <div style={{ padding: '20px' }}>
-      <h1 style={{ marginBottom: '20px' }}>爬虫管理</h1>
-      
-      <div style={{ marginBottom: '20px' }}>
-        <Button type="primary" onClick={showAddModal} style={{ marginRight: '10px' }}>
-          添加爬虫
-        </Button>
-        <Button 
-          type={spidersRunning ? 'default' : 'primary'} 
-          onClick={toggleAllSpiders} 
-          style={{ marginRight: '10px' }} 
-          loading={startAllLoading || stopAllLoading}
-        >
-          {spidersRunning ? '停止所有爬虫' : '启动所有爬虫'}
-        </Button>
-        <Button type="primary" onClick={uploadScriptsToDatabase} loading={uploadLoading} style={{ marginRight: '10px' }}>
-          上传脚本到数据库
-        </Button>
-        <Button type="default" onClick={showLocalScriptsModal} style={{ marginRight: '10px' }}>
-          从本地添加脚本
-        </Button>
-        <Input 
-          placeholder="搜索URL" 
-          value={searchUrl} 
-          onChange={(e) => setSearchUrl(e.target.value)} 
-          style={{ width: '300px', marginLeft: '10px' }} 
-          prefix={<SearchOutlined />}
-        />
-      </div>
-
-      <Spin spinning={loading}>
-        <Card title="爬虫配置列表">
-          <Table columns={columns} dataSource={filteredSpiders} rowKey="id" />
-        </Card>
-      </Spin>
-
-      <SpiderModal />
-      <ScriptModal />
 
       {/* 本地脚本列表模态框 */}
       <Modal
