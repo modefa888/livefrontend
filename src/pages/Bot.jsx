@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Button, Table, Form, Input, Select, Modal, message, Spin, Tabs, Checkbox, Switch, List, Alert, Row, Col, Space, Divider } from 'antd'
+import { Card, Button, Table, Form, Input, Select, Modal, message, Spin, Tabs, Checkbox, Switch, List, Alert, Row, Col, Space, Divider, Badge, Tag } from 'antd'
 import { RobotOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, UpOutlined, DownOutlined, ArrowLeftOutlined, EyeInvisibleOutlined, EyeTwoTone, CopyOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons'
 import api from '../utils/api'
 import { useNavigate } from 'react-router-dom'
@@ -8,6 +8,28 @@ import { useBotLoading } from '../contexts/BotLoadingContext'
 const { Option } = Select
 const { TabPane } = Tabs
 const { Item: ListItem, Item: { Meta: ListItemMeta } } = List
+
+// 添加CSS动画样式
+const styles = `
+  @keyframes pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(82, 196, 26, 0.7);
+    }
+    70% {
+      box-shadow: 0 0 0 10px rgba(82, 196, 26, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(82, 196, 26, 0);
+    }
+  }
+`
+
+// 注入样式
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style')
+  styleSheet.textContent = styles
+  document.head.appendChild(styleSheet)
+}
 
 // 加密密钥，应该从环境变量中获取
 // 注意：前后端密钥必须一致，且长度必须符合 AES-256 要求（32字节）
@@ -133,6 +155,10 @@ const Bot = () => {
   // 代理检测相关状态
   const [proxyStatus, setProxyStatus] = useState(null)
   const [checkingProxy, setCheckingProxy] = useState(false)
+
+  // BotGuard 相关状态
+  const [botGuardStatus, setBotGuardStatus] = useState(null)
+  const [botGuardLoading, setBotGuardLoading] = useState(false)
   
   // 启动记录相关状态
   const [startupRecords, setStartupRecords] = useState([])
@@ -380,6 +406,35 @@ const Bot = () => {
       console.error('获取启动记录失败:', error)
     } finally {
       setRecordsLoading(false)
+    }
+  }
+
+  // 获取 BotGuard 状态
+  const fetchBotGuardStatus = async () => {
+    setBotGuardLoading(true)
+    try {
+      const response = await api.get('/api/bot/botguard/status')
+      setBotGuardStatus(response.data)
+    } catch (error) {
+      console.error('获取 BotGuard 状态失败:', error)
+    } finally {
+      setBotGuardLoading(false)
+    }
+  }
+
+  // 手动重启机器人
+  const handleManualRestart = async () => {
+    try {
+      await api.post('/api/bot/botguard/restart')
+      message.success('已触发自动重启')
+      // 等待一下再刷新状态
+      setTimeout(() => {
+        fetchBotGuardStatus()
+        fetchBotStatus()
+      }, 2000)
+    } catch (error) {
+      message.error('触发重启失败')
+      console.error(error)
     }
   }
   
@@ -1212,6 +1267,7 @@ const Bot = () => {
       fetchBotStatus();
       fetchEnvConfig();
       fetchStartupRecords();
+      fetchBotGuardStatus();
       
       // 启动倒计时
       setCountdown(30);
@@ -1222,6 +1278,7 @@ const Bot = () => {
             fetchBotStatus();
             fetchEnvConfig();
             fetchStartupRecords();
+            fetchBotGuardStatus();
             return 30;
           }
           return prevCountdown - 1;
@@ -1253,6 +1310,7 @@ const Bot = () => {
     fetchUsers()
     fetchStartupRecords()
     fetchConfig()
+    fetchBotGuardStatus()
     
     // 先从localStorage加载本地机器人消息
     const savedMessages = loadLocalBotMessages()
@@ -1403,9 +1461,22 @@ const Bot = () => {
         
         <TabPane tab={botStatus?.isRunning ? '🤖 机器人状态 (运行中)' : '🚫 机器人状态 (已停止)'} key="status">
           <Spin spinning={livebotLoading}>
+            {/* 机器人状态面板 */}
             <Card title="⚙️ 机器人状态" extra={<Button icon={<ReloadOutlined />} onClick={toggleAutoRefresh} loading={refreshLoading} type={autoRefresh ? 'primary' : 'default'}>{autoRefresh ? `停止自动刷新 (${countdown}s)` : '启动自动刷新 (30s)'}</Button>}>  
               <div style={{ fontSize: '16px', lineHeight: '2' }}>
-                <p><strong>运行状态:</strong> {botStatus?.isRunning ? '✅ 运行中' : '❌ 已停止'}</p>
+                <p>
+                  <strong>运行状态:</strong>&nbsp;
+                  {botStatus?.isRunning ? (
+                    <Tag color="green" style={{ 
+                      animation: '2s ease 0s infinite normal none running pulse', 
+                      boxShadow: 'rgba(82, 196, 26, 0.5) 0px 0px 10px' 
+                    }}>
+                      🟢 运行中
+                    </Tag>
+                  ) : (
+                    '❌ 已停止'
+                  )}
+                </p>
                 
                 <div style={{ marginTop: '20px', padding: '10px', background: '#f5f5f5', borderRadius: '4px' }}>
                   <h3 style={{ marginBottom: '10px' }}>🌐 环境配置</h3>
