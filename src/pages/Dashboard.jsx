@@ -3,6 +3,7 @@ import { Card, Row, Col, Statistic, Spin, message, List, Avatar, Tag, Progress, 
 import { UserOutlined, VideoCameraOutlined, SettingOutlined, FileTextOutlined, CheckCircleOutlined, EditOutlined, DeleteOutlined, PlusOutlined, RobotOutlined, MessageOutlined, TeamOutlined, LogoutOutlined, DatabaseOutlined, BarChartOutlined, BellOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import api from '../utils/api'
+import packageData from '../../package.json'
 
 function Dashboard() {
   const navigate = useNavigate()
@@ -224,7 +225,7 @@ function Dashboard() {
           display: 'flex',
           gap: '16px'
         }}>
-          <span>前端版本: 1.0.0</span>
+          <span>前端版本: {packageData.version}</span>
           <span>后端版本: {backendVersion || '加载中...'}</span>
         </div>
       </div>

@@ -1759,23 +1759,37 @@ const FaBuBot = () => {
               <p><strong>创建时间:</strong> {new Date(currentMediaGroup.created_at).toLocaleString()}</p>
               {currentMediaGroup.forwarded_message_ids && (
                 <>
-                  <p><strong>转发消息ID:</strong> {JSON.parse(currentMediaGroup.forwarded_message_ids).join(', ')}</p>
-                  {fabuConfig?.FORWARD_CHAT_ID && (
-                    <p>
-                      <strong>跳转链接:</strong>
-                      {JSON.parse(currentMediaGroup.forwarded_message_ids).map((msgId, index) => (
-                        <a 
-                          key={index}
-                          href={`https://t.me/c/${fabuConfig.FORWARD_CHAT_ID.toString().replace('-100', '')}/${msgId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ marginLeft: index > 0 ? '8px' : '8px' }}
-                        >
-                          消息{index + 1}
-                        </a>
-                      ))}
-                    </p>
-                  )}
+                  <p><strong>转发消息ID:</strong> {currentMediaGroup.forwarded_message_ids}</p>
+                  {(() => {
+                    try {
+                      const forwardedData = JSON.parse(currentMediaGroup.forwarded_message_ids)
+                      if (typeof forwardedData === 'object' && forwardedData !== null) {
+                        const chatId = Object.keys(forwardedData)[0]
+                        const messageIds = forwardedData[chatId]
+                        if (chatId && Array.isArray(messageIds) && messageIds.length > 0) {
+                          return (
+                            <p>
+                              <strong>跳转链接:</strong>
+                              {messageIds.map((msgId, index) => (
+                                <a 
+                                  key={index}
+                                  href={`https://t.me/c/${chatId.toString().replace('-100', '')}/${msgId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ marginLeft: index > 0 ? '8px' : '8px' }}
+                                >
+                                  消息{index + 1}
+                                </a>
+                              ))}
+                            </p>
+                          )
+                        }
+                      }
+                    } catch (e) {
+                      console.error('解析转发消息ID失败:', e)
+                    }
+                    return null
+                  })()}
                 </>
               )}
             </div>
@@ -1945,6 +1959,38 @@ const FaBuBot = () => {
                         点击跳转到消息
                       </a>
                     </p>
+                  )}
+                  {currentFileItem.forwarded_message_ids && (
+                    <>
+                      <p><strong>转发消息IDs:</strong> {currentFileItem.forwarded_message_ids}</p>
+                      {(() => {
+                        try {
+                          const forwardedData = JSON.parse(currentFileItem.forwarded_message_ids)
+                          if (typeof forwardedData === 'object' && forwardedData !== null) {
+                            const chatId = Object.keys(forwardedData)[0]
+                            const messageId = forwardedData[chatId]
+                            if (chatId && messageId) {
+                              return (
+                                <p>
+                                  <strong>跳转链接:</strong>
+                                  <a 
+                                    href={`https://t.me/c/${chatId.toString().replace('-100', '')}/${messageId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ marginLeft: '8px' }}
+                                  >
+                                    点击跳转到消息
+                                  </a>
+                                </p>
+                              )
+                            }
+                          }
+                        } catch (e) {
+                          console.error('解析转发消息ID失败:', e)
+                        }
+                        return null
+                      })()}
+                    </>
                   )}
                   {currentFileItem.caption !== undefined && (
                     <>

@@ -26,6 +26,8 @@ const Tools = () => {
   const [isSettingRemote, setIsSettingRemote] = useState(false)
   const [isPushing, setIsPushing] = useState(false)
   const [isPulling, setIsPulling] = useState(false)
+  const [isRenamingBranch, setIsRenamingBranch] = useState(false)
+  const [isResettingGit, setIsResettingGit] = useState(false)
   
   // 系统状态相关状态
   const [systemStatus, setSystemStatus] = useState(null)
@@ -729,6 +731,52 @@ const Tools = () => {
     }
   }
 
+  // 重命名分支为main
+  const handleRenameBranch = async () => {
+    setIsRenamingBranch(true)
+    try {
+      const response = await api.post('/api/tools/system/git/rename-branch', {
+        type: gitType,
+        newName: 'main'
+      })
+      message.success(response.data.message)
+      fetchGitStatus()
+    } catch (error) {
+      message.error('重命名分支失败')
+      console.error(error)
+    } finally {
+      setIsRenamingBranch(false)
+    }
+  }
+
+  // 重置Git仓库（清除历史）
+  const handleResetGit = async () => {
+    Modal.confirm({
+      title: '确认重置Git仓库',
+      content: '这将清除所有Git历史记录并重新初始化仓库。此操作不可撤销！\n\n建议在继续前备份重要数据。',
+      okText: '确认重置',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        setIsResettingGit(true)
+        try {
+          const response = await api.post('/api/tools/system/git/reset', {
+            type: gitType,
+            initialCommitMessage: 'Initial commit'
+          })
+          message.success(response.data.message)
+          fetchGitStatus()
+          fetchGitLog()
+        } catch (error) {
+          message.error('重置Git仓库失败')
+          console.error(error)
+        } finally {
+          setIsResettingGit(false)
+        }
+      }
+    })
+  }
+
   // 当 gitType 变化时，重新获取状态和日志
   useEffect(() => {
     fetchGitStatus()
@@ -1384,7 +1432,19 @@ const Tools = () => {
               <>
                 <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
                   <h4>Git 状态</h4>
-                  <p><strong>当前分支:</strong> {gitStatus.branch}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                    <p><strong>当前分支:</strong> {gitStatus.branch}</p>
+                    {gitStatus.branch === 'master' && (
+                      <Button 
+                        type="primary" 
+                        size="small"
+                        onClick={handleRenameBranch}
+                        loading={isRenamingBranch}
+                      >
+                        重命名为main
+                      </Button>
+                    )}
+                  </div>
                   <p><strong>最近提交:</strong> {gitStatus.lastCommit}</p>
                   
                   {gitStatus.status && (
@@ -1422,7 +1482,7 @@ const Tools = () => {
                     </Button>
                   </div>
                   {remoteUrl && (
-                    <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                       <Button 
                         type="primary" 
                         onClick={handlePush}
@@ -1438,6 +1498,18 @@ const Tools = () => {
                       </Button>
                     </div>
                   )}
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <Button 
+                      danger
+                      onClick={handleResetGit}
+                      loading={isResettingGit}
+                    >
+                      重置Git仓库（清除历史）
+                    </Button>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
+                    提示：如果推送被GitHub的秘密检测阻止，请使用"重置Git仓库"功能清除历史记录后重新提交。
+                  </p>
                 </div>
                 
                 <div style={{ marginBottom: '20px' }}>

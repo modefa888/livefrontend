@@ -437,6 +437,52 @@ const Bot = () => {
       console.error(error)
     }
   }
+
+  // 停止单个机器人（停止后自动禁用自动重启，从守护服务剔除）
+  const stopSingleBot = async (botName) => {
+    try {
+      await api.post(`/api/bot/botguard/stop/${botName}`)
+      // 停止后自动禁用自动重启，从守护服务剔除
+      await api.post(`/api/bot/botguard/autorestart/${botName}`, { enabled: false })
+      message.success(`${botName} 已停止并从守护服务中剔除`)
+      fetchBotGuardStatus()
+      if (botName === 'livebot') {
+        fetchBotStatus()
+      }
+    } catch (error) {
+      message.error(`停止 ${botName} 失败`)
+      console.error(error)
+    }
+  }
+
+  // 启动单个机器人（启动后自动启用自动重启，加入守护服务）
+  const startSingleBot = async (botName) => {
+    try {
+      await api.post(`/api/bot/botguard/start/${botName}`)
+      // 启动后自动启用自动重启，加入守护服务
+      await api.post(`/api/bot/botguard/autorestart/${botName}`, { enabled: true })
+      message.success(`${botName} 启动成功并加入守护服务`)
+      fetchBotGuardStatus()
+      if (botName === 'livebot') {
+        fetchBotStatus()
+      }
+    } catch (error) {
+      message.error(`启动 ${botName} 失败`)
+      console.error(error)
+    }
+  }
+
+  // 设置自动重启
+  const setAutoRestart = async (botName, enabled) => {
+    try {
+      await api.post(`/api/bot/botguard/autorestart/${botName}`, { enabled })
+      message.success(`${botName} 自动重启已${enabled ? '启用' : '禁用'}`)
+      fetchBotGuardStatus()
+    } catch (error) {
+      message.error(`设置 ${botName} 自动重启失败`)
+      console.error(error)
+    }
+  }
   
   // 获取命令列表
   const fetchCommands = async () => {
@@ -2133,6 +2179,171 @@ const Bot = () => {
           </Spin>
         </TabPane>
         
+        <TabPane tab="守护服务" key="botguard">
+          <Spin spinning={botGuardLoading}>
+            <Card title="🔒 机器人守护服务" extra={
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <Button type="primary" onClick={fetchBotGuardStatus} loading={botGuardLoading}>
+                  刷新状态
+                </Button>
+                <Button onClick={handleManualRestart}>
+                  手动重启所有
+                </Button>
+              </div>
+            }>
+              <div style={{ fontSize: '15px', lineHeight: '2.2' }}>
+                <div className="ant-row" style={{ marginLeft: '-8px', marginRight: '-8px', rowGap: '16px' }}>
+                  <div className="ant-col ant-col-xs-24 ant-col-md-12" style={{ paddingLeft: '8px', paddingRight: '8px' }}>
+                    <Card style={{ height: '100%', background: botGuardStatus?.livebot?.isRunning ? '#f6ffed' : '#fff7e6' }}>
+                      <div className="ant-card-head">
+                        <div className="ant-card-head-wrapper">
+                          <div className="ant-card-head-title">🤖 LiveBot 状态</div>
+                          <div className="ant-card-extra">
+                            <Tag 
+                              color={botGuardStatus?.livebot?.isRunning ? 'green' : 'orange'} 
+                              style={botGuardStatus?.livebot?.isRunning ? {
+                                animation: '2s ease 0s infinite normal none running pulse',
+                                boxShadow: 'rgba(82, 196, 26, 0.5) 0px 0px 10px'
+                              } : {}}
+                            >
+                              {botGuardStatus?.livebot?.isRunning ? '🟢 运行中' : '🔴 已停止'}
+                            </Tag>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="ant-card-body">
+                        <p><strong>重启次数:</strong> {botGuardStatus?.livebot?.restartCount || 0} 次</p>
+                        <p><strong>最后活跃:</strong> {botGuardStatus?.livebot?.lastActive ? new Date(botGuardStatus.livebot.lastActive).toLocaleString() : '未知'}</p>
+                        <p><strong>自动重启:</strong> 
+                          <Switch 
+                            checked={botGuardStatus?.livebot?.autoRestartEnabled || false} 
+                            onChange={(checked) => setAutoRestart('livebot', checked)}
+                            checkedChildren="开启" 
+                            unCheckedChildren="关闭"
+                            style={{ marginLeft: '8px' }}
+                          />
+                        </p>
+                        <div style={{ marginTop: '16px', display: 'flex', gap: '10px' }}>
+                          <Button 
+                            type="primary" 
+                            icon={<PlayCircleOutlined />}
+                            onClick={() => startSingleBot('livebot')}
+                            disabled={botGuardStatus?.livebot?.isRunning}
+                          >
+                            启动
+                          </Button>
+                          <Button 
+                            danger 
+                            icon={<PauseCircleOutlined />}
+                            onClick={() => stopSingleBot('livebot')}
+                            disabled={!botGuardStatus?.livebot?.isRunning}
+                          >
+                            停止
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  </div>
+                  <div className="ant-col ant-col-xs-24 ant-col-md-12" style={{ paddingLeft: '8px', paddingRight: '8px' }}>
+                    <Card style={{ height: '100%', background: botGuardStatus?.fabuBot?.isRunning ? '#f6ffed' : '#fff7e6' }}>
+                      <div className="ant-card-head">
+                        <div className="ant-card-head-wrapper">
+                          <div className="ant-card-head-title">📢 FaBuBot 状态</div>
+                          <div className="ant-card-extra">
+                            <Tag 
+                              color={botGuardStatus?.fabuBot?.isRunning ? 'green' : 'orange'} 
+                              style={botGuardStatus?.fabuBot?.isRunning ? {
+                                animation: '2s ease 0s infinite normal none running pulse',
+                                boxShadow: 'rgba(82, 196, 26, 0.5) 0px 0px 10px'
+                              } : {}}
+                            >
+                              {botGuardStatus?.fabuBot?.isRunning ? '🟢 运行中' : '🔴 已停止'}
+                            </Tag>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="ant-card-body">
+                        <p><strong>重启次数:</strong> {botGuardStatus?.fabuBot?.restartCount || 0} 次</p>
+                        <p><strong>最后活跃:</strong> {botGuardStatus?.fabuBot?.lastActive ? new Date(botGuardStatus.fabuBot.lastActive).toLocaleString() : '未知'}</p>
+                        <p><strong>自动重启:</strong> 
+                          <Switch 
+                            checked={botGuardStatus?.fabuBot?.autoRestartEnabled || false} 
+                            onChange={(checked) => setAutoRestart('fabubot', checked)}
+                            checkedChildren="开启" 
+                            unCheckedChildren="关闭"
+                            style={{ marginLeft: '8px' }}
+                          />
+                        </p>
+                        <div style={{ marginTop: '16px', display: 'flex', gap: '10px' }}>
+                          <Button 
+                            type="primary" 
+                            icon={<PlayCircleOutlined />}
+                            onClick={() => startSingleBot('fabubot')}
+                            disabled={botGuardStatus?.fabuBot?.isRunning}
+                          >
+                            启动
+                          </Button>
+                          <Button 
+                            danger 
+                            icon={<PauseCircleOutlined />}
+                            onClick={() => stopSingleBot('fabubot')}
+                            disabled={!botGuardStatus?.fabuBot?.isRunning}
+                          >
+                            停止
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  </div>
+                </div>
+                <Divider />
+                <div className="ant-row" style={{ marginLeft: '-8px', marginRight: '-8px', rowGap: '16px', marginTop: '16px' }}>
+                  <div className="ant-col ant-col-xs-24 ant-col-md-8" style={{ paddingLeft: '8px', paddingRight: '8px' }}>
+                    <Card>
+                      <div className="ant-card-head">
+                        <div className="ant-card-head-wrapper">
+                          <div className="ant-card-head-title">⚙️ 服务运行</div>
+                        </div>
+                      </div>
+                      <div className="ant-card-body">
+                        <p style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                          <Tag color={botGuardStatus?.guardRunning ? 'green' : 'red'}>
+                            {botGuardStatus?.guardRunning ? '🟢 运行中' : '🔴 已停止'}
+                          </Tag>
+                        </p>
+                      </div>
+                    </Card>
+                  </div>
+                  <div className="ant-col ant-col-xs-24 ant-col-md-8" style={{ paddingLeft: '8px', paddingRight: '8px' }}>
+                    <Card>
+                      <div className="ant-card-head">
+                        <div className="ant-card-head-wrapper">
+                          <div className="ant-card-head-title">🔍 健康检查</div>
+                        </div>
+                      </div>
+                      <div className="ant-card-body">
+                        <p style={{ fontSize: '18px', fontWeight: 'bold' }}>{botGuardStatus?.healthCheckInterval || '30 秒'}</p>
+                      </div>
+                    </Card>
+                  </div>
+                  <div className="ant-col ant-col-xs-24 ant-col-md-8" style={{ paddingLeft: '8px', paddingRight: '8px' }}>
+                    <Card>
+                      <div className="ant-card-head">
+                        <div className="ant-card-head-wrapper">
+                          <div className="ant-card-head-title">🔄 自动重启</div>
+                        </div>
+                      </div>
+                      <div className="ant-card-body">
+                        <p style={{ fontSize: '18px', fontWeight: 'bold' }}>{botGuardStatus?.autoRestartInterval || '60 秒'}</p>
+                      </div>
+                    </Card>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </Spin>
+        </TabPane>
+
         <TabPane tab="配置管理" key="config">
           <Spin spinning={configLoading}>
             <Card style={{ marginBottom: 20 }}>
