@@ -43,9 +43,10 @@ const Tools = () => {
   const [cleanupButtonLoading, setCleanupButtonLoading] = useState(false)
   
   // 代理检测相关状态
-  const [proxyUrl, setProxyUrl] = useState('http://127.0.0.1:10808')
+  const [proxyUrl, setProxyUrl] = useState('')
   const [checkingProxy, setCheckingProxy] = useState(false)
   const [proxyStatus, setProxyStatus] = useState(null)
+  const [proxyForm] = Form.useForm()
   
   // 密码验证相关状态
   const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false)
@@ -307,13 +308,20 @@ const Tools = () => {
   }
 
   // 检测代理是否可用
-  const checkProxy = async () => {
+  const checkProxy = async (values) => {
     setCheckingProxy(true)
     setProxyStatus(null)
     try {
+      const currentProxyUrl = values?.proxyUrl || proxyForm.getFieldValue('proxyUrl')
+      
+      if (!currentProxyUrl) {
+        message.error('请输入代理地址')
+        setCheckingProxy(false)
+        return
+      }
       
       const response = await api.post('/api/tools/system/check-proxy', {
-        proxyUrl
+        proxyUrl: currentProxyUrl
       })
       setProxyStatus(response.data)
       message.success(response.data.message)
@@ -915,20 +923,25 @@ const Tools = () => {
 
             <div style={{ marginTop: '20px' }}>
               <Card title="代理检测">
-                <Form layout="vertical" onFinish={checkProxy}>
+                <Form layout="vertical" form={proxyForm}>
                   <Form.Item
                     name="proxyUrl"
                     label="代理地址"
                     rules={[{ required: true, message: '请输入代理地址' }]}
-                    initialValue={proxyUrl}
                   >
                     <Input 
                       placeholder="请输入代理地址，例如: http://127.0.0.1:10808" 
-                      onChange={(e) => setProxyUrl(e.target.value)}
                     />
                   </Form.Item>
                   <Form.Item>
-                    <Button type="primary" onClick={checkProxy} loading={checkingProxy}>
+                    <Button type="primary" loading={checkingProxy} onClick={() => {
+                      const currentProxyUrl = proxyForm.getFieldValue('proxyUrl')
+                      if (!currentProxyUrl) {
+                        message.error('请输入代理地址')
+                        return
+                      }
+                      checkProxy({ proxyUrl: currentProxyUrl })
+                    }}>
                       检测代理
                     </Button>
                   </Form.Item>

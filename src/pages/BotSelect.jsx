@@ -187,10 +187,21 @@ function BotSelect() {
 
       {/* BotGuard 状态面板 */}
       <Card 
-        title="🛡️ BotGuard 守护服务" 
+        title="🛡️ BotGuard 守护服务"
         style={{ marginBottom: '30px' }}
         extra={
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {botGuardStatus?.guardRunning ? (
+              <Tag color="green" style={{ 
+                animation: '2s ease 0s infinite normal none running pulse', 
+                boxShadow: 'rgba(82, 196, 26, 0.5) 0px 0px 10px',
+                padding: '2px 8px'
+              }}>
+                🟢 运行中
+              </Tag>
+            ) : (
+              <Badge status="error" text="❌ 已停止" />
+            )}
             <Button 
               icon={<ReloadOutlined />}
               onClick={fetchBotGuardStatus}
@@ -252,43 +263,6 @@ function BotSelect() {
               >
                 <p><strong>重启次数:</strong> {botGuardStatus?.fabuBot?.restartCount || 0} 次</p>
                 <p><strong>最后活跃:</strong> {botGuardStatus?.fabuBot?.lastActive ? new Date(botGuardStatus.fabuBot.lastActive).toLocaleString() : '未知'}</p>
-              </Card>
-            </Col>
-          </Row>
-          
-          <Divider />
-          
-          <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
-            <Col xs={24} md={8}>
-              <Card size="small" title="⚙️ 服务运行">
-                <p style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                  {botGuardStatus?.guardRunning ? (
-                    <>
-                      <Tag color="green" style={{ 
-                        animation: '2s ease 0s infinite normal none running pulse', 
-                        boxShadow: 'rgba(82, 196, 26, 0.5) 0px 0px 10px',
-                        marginRight: '8px'
-                      }}>
-                        🟢 运行中
-                      </Tag>
-                    </>
-                  ) : (
-                    <>
-                      <Badge status="error" text="" />
-                      ❌ 已停止
-                    </>
-                  )}
-                </p>
-              </Card>
-            </Col>
-            <Col xs={24} md={8}>
-              <Card size="small" title="🔍 健康检查">
-                <p style={{ fontSize: '18px', fontWeight: 'bold' }}>{botGuardStatus?.healthCheckInterval || '30 秒'}</p>
-              </Card>
-            </Col>
-            <Col xs={24} md={8}>
-              <Card size="small" title="🔄 自动重启">
-                <p style={{ fontSize: '18px', fontWeight: 'bold' }}>{botGuardStatus?.autoRestartInterval || '60 秒'}</p>
               </Card>
             </Col>
           </Row>

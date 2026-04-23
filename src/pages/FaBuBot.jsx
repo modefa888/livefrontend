@@ -130,6 +130,22 @@ const FaBuBot = () => {
   const [forbiddenWordsLoading, setForbiddenWordsLoading] = useState(false)
   const [addForbiddenWordModalVisible, setAddForbiddenWordModalVisible] = useState(false)
   const [addForbiddenWordForm] = Form.useForm()
+  
+  // 守护服务相关状态
+  const [botGuardStatus, setBotGuardStatus] = useState(null)
+  const [botGuardLoading, setBotGuardLoading] = useState(false)
+  const [botConfigs, setBotConfigs] = useState({})
+  
+  // 启动记录相关状态
+  const [startupRecords, setStartupRecords] = useState([])
+  const [startupRecordsLoading, setStartupRecordsLoading] = useState(false)
+  
+  // Tab懒加载相关状态
+  const [activeTabKey, setActiveTabKey] = useState('status')
+  const [loadedTabs, setLoadedTabs] = useState(new Set(['status']))
+  const [configModalVisible, setConfigModalVisible] = useState(false)
+  const [editingBot, setEditingBot] = useState(null)
+  const [guardConfigForm] = Form.useForm()
 
   const copyToClipboard = (text, fieldName) => {
     navigator.clipboard.writeText(text)
@@ -1026,6 +1042,142 @@ const FaBuBot = () => {
     }
   }
 
+  // 守护服务相关方法
+  const fetchBotGuardStatus = async () => {
+    setBotGuardLoading(true)
+    try {
+      const response = await api.get('/api/bot/botguard/status')
+      setBotGuardStatus(response.data)
+      await fetchBotConfigs()
+    } catch (error) {
+      message.error('获取守护服务状态失败')
+      console.error(error)
+    } finally {
+      setBotGuardLoading(false)
+    }
+  }
+
+  const fetchBotConfigs = async () => {
+    try {
+      const response = await api.get('/api/bot/botguard/config')
+      setBotConfigs(response.data.configs || response.data)
+    } catch (error) {
+      console.error('获取守护服务配置失败:', error)
+    }
+  }
+
+  const setAutoRestart = async (botName, enabled) => {
+    try {
+      await api.post(`/api/bot/botguard/autorestart/${botName}`, { enabled })
+      message.success(`${botName === 'fabubot' ? 'FaBuBot' : 'LiveBot'} 自动重启${enabled ? '已开启' : '已关闭'}`)
+      fetchBotGuardStatus()
+    } catch (error) {
+      message.error('设置自动重启失败')
+      console.error(error)
+    }
+  }
+
+  const startSingleBot = async (botName) => {
+    try {
+      await api.post(`/api/bot/botguard/start/${botName}`)
+      message.success(`${botName === 'fabubot' ? 'FaBuBot' : 'LiveBot'} 启动成功`)
+      fetchBotGuardStatus()
+    } catch (error) {
+      message.error('启动机器人失败')
+      console.error(error)
+    }
+  }
+
+  const stopSingleBot = async (botName) => {
+    try {
+      await api.post(`/api/bot/botguard/stop/${botName}`)
+      message.success(`${botName === 'fabubot' ? 'FaBuBot' : 'LiveBot'} 停止成功`)
+      fetchBotGuardStatus()
+    } catch (error) {
+      message.error('停止机器人失败')
+      console.error(error)
+    }
+  }
+
+  const updateInterval = async (botName, key, value) => {
+    try {
+      await api.put(`/api/bot/botguard/config/${botName}`, {
+        [key]: value
+      })
+      message.success(`${key === 'health_check_interval' ? '健康检查' : '自动重启'}间隔已更新`)
+      fetchBotConfigs()
+    } catch (error) {
+      message.error('更新间隔失败')
+      console.error(error)
+    }
+  }
+
+  const showConfigModal = (botName) => {
+    setEditingBot(botName)
+    const config = botConfigs[botName]
+    if (config) {
+      guardConfigForm.setFieldsValue({
+        enabled: config.enabled === 1 || config.enabled === true,
+        health_check_interval: config.health_check_interval ? config.health_check_interval / 1000 : 30,
+        auto_restart_interval: config.auto_restart_interval ? config.auto_restart_interval / 1000 : 60,
+        auto_restart_enabled: config.auto_restart_enabled === 1 || config.auto_restart_enabled === true,
+        max_restart_attempts: config.max_restart_attempts || 5
+      })
+    } else {
+      guardConfigForm.setFieldsValue({
+        enabled: true,
+        health_check_interval: 30,
+        auto_restart_interval: 60,
+        auto_restart_enabled: true,
+        max_restart_attempts: 5
+      })
+    }
+    setConfigModalVisible(true)
+  }
+
+  const handleSaveConfig = async (values) => {
+    try {
+      await api.put(`/api/bot/botguard/config/${editingBot}`, {
+        enabled: values.enabled,
+        health_check_interval: values.health_check_interval * 1000,
+        auto_restart_interval: values.auto_restart_interval * 1000,
+        auto_restart_enabled: values.auto_restart_enabled,
+        max_restart_attempts: values.max_restart_attempts
+      })
+      message.success('配置更新成功')
+      setConfigModalVisible(false)
+      fetchBotGuardStatus()
+    } catch (error) {
+      message.error('更新配置失败')
+      console.error(error)
+    }
+  }
+
+  const resetRestartCounts = async () => {
+    try {
+      await api.post('/api/bot/botguard/reset-counts')
+      message.success('重启计数已重置')
+      fetchBotGuardStatus()
+    } catch (error) {
+      message.error('重置重启计数失败')
+      console.error(error)
+    }
+  }
+
+  // 获取启动记录
+  const fetchStartupRecords = async () => {
+    setStartupRecordsLoading(true)
+    try {
+      const response = await api.get('/api/fabu-bot/startup-records')
+      setStartupRecords(response.data.records)
+    } catch (error) {
+      message.error('获取启动记录失败')
+      console.error(error)
+    } finally {
+      setStartupRecordsLoading(false)
+    }
+  }
+
   useEffect(() => {
     return () => {
       if (autoRefreshInterval) {
@@ -1034,14 +1186,52 @@ const FaBuBot = () => {
     }
   }, [autoRefreshInterval])
 
+  // Tab切换处理函数
+  const handleTabChange = async (key) => {
+    setActiveTabKey(key)
+    
+    // 如果该tab已经加载过，不再请求
+    if (loadedTabs.has(key)) {
+      return
+    }
+    
+    // 标记为已加载
+    setLoadedTabs(prev => new Set([...prev, key]))
+    
+    // 根据tab key加载对应数据
+    switch (key) {
+      case 'media-groups':
+        await fetchMediaGroups()
+        break
+      case 'single-videos':
+        await fetchSingleVideos()
+        break
+      case 'config':
+        await fetchConfig()
+        break
+      case 'commands':
+        await fetchCommands()
+        break
+      case 'users':
+        await fetchUsers()
+        break
+      case 'groups':
+        await fetchGroups()
+        break
+      case 'botguard':
+        await fetchBotGuardStatus()
+        await fetchBotConfigs()
+        break
+      default:
+        break
+    }
+  }
+
   useEffect(() => {
+    // 页面加载时只加载必要的初始数据
     fetchBotStatus()
-    fetchMediaGroups()
-    fetchSingleVideos()
     fetchConfig()
-    fetchCommands()
-    fetchUsers()
-    fetchGroups()
+    fetchStartupRecords()
   }, [])
 
   return (
@@ -1081,7 +1271,8 @@ const FaBuBot = () => {
       </div>
       
       <Tabs 
-        defaultActiveKey="status"
+        activeKey={activeTabKey}
+        onChange={handleTabChange}
         items={[
           {
             key: 'status',
@@ -1123,6 +1314,53 @@ const FaBuBot = () => {
                         </p>
                       </div>
                     )}
+                    
+                    <div style={{ marginTop: '20px', padding: '10px', background: '#f5f5f5', borderRadius: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <h3 style={{ marginBottom: 0 }}>📊 启动记录</h3>
+                        <Button 
+                          type="link" 
+                          size="small" 
+                          onClick={fetchStartupRecords}
+                          loading={startupRecordsLoading}
+                        >
+                          刷新
+                        </Button>
+                      </div>
+                      <Spin spinning={startupRecordsLoading}>
+                        {startupRecords.length > 0 ? (
+                          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                            {startupRecords.map((record, index) => (
+                              <div key={index} style={{ padding: '5px 0', borderBottom: '1px solid #e8e8e8' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                                  <span>{new Date(record.timestamp).toLocaleString()}</span>
+                                  <span style={{ color: record.success ? '#52c41a' : '#ff4d4f' }}>
+                                    {record.success ? '✅ 成功' : '❌ 失败'}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                                  <span>环境: {record.environment || '未知'}</span>
+                                  <span style={{ marginLeft: '15px' }}>机器人: {record.appName || '未知'}</span>
+                                  <span style={{ marginLeft: '15px' }}>操作人: {record.createdBy || '未知'}</span>
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                                  <span>代理: {record.proxy || '未知'}</span>
+                                </div>
+                                {record.error && (
+                                  <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                                    错误: {record.error.substring(0, 50)}...
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ textAlign: 'center', color: '#999', padding: '20px' }}>
+                            暂无启动记录
+                          </div>
+                        )}
+                      </Spin>
+                    </div>
                   </div>
                 </Card>
               </Spin>
@@ -1732,9 +1970,206 @@ const FaBuBot = () => {
                 </Card>
               </Spin>
             )
+          },
+          {
+            key: 'botguard',
+            label: '守护服务',
+            children: (
+              <Spin spinning={botGuardLoading}>
+                <Card title="🔒 机器人守护服务" extra={
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <Button type="primary" onClick={fetchBotGuardStatus} loading={botGuardLoading}>
+                      刷新状态
+                    </Button>
+                    <Button onClick={resetRestartCounts}>
+                      重置重启计数
+                    </Button>
+                  </div>
+                }>
+                  <div style={{ fontSize: '15px', lineHeight: '2.2' }}>
+                    <div className="ant-row" style={{ marginLeft: '-8px', marginRight: '-8px', rowGap: '16px' }}>
+                      <div className="ant-col ant-col-xs-24 ant-col-md-12" style={{ paddingLeft: '8px', paddingRight: '8px' }}>
+                        <Card style={{ height: '100%', background: botGuardStatus?.fabuBot?.isRunning ? '#f6ffed' : '#fff7e6' }}>
+                          <div className="ant-card-head">
+                            <div className="ant-card-head-wrapper">
+                              <div className="ant-card-head-title">📢 FaBuBot 状态</div>
+                              <div className="ant-card-extra">
+                                <Tag 
+                                  color={botGuardStatus?.fabuBot?.isRunning ? 'green' : 'orange'} 
+                                  style={botGuardStatus?.fabuBot?.isRunning ? {
+                                    animation: '2s ease 0s infinite normal none running pulse',
+                                    boxShadow: 'rgba(82, 196, 26, 0.5) 0px 0px 10px'
+                                  } : {}}
+                                >
+                                  {botGuardStatus?.fabuBot?.isRunning ? '🟢 运行中' : '🔴 已停止'}
+                                </Tag>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="ant-card-body">
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '14px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '16px' }}>🔄</span>
+                                <span><strong>重启次数:</strong></span>
+                                <span style={{ color: botGuardStatus?.fabuBot?.restartCount > 0 ? '#fa8c16' : '#52c41a', fontWeight: 'bold' }}>
+                                  {botGuardStatus?.fabuBot?.restartCount || 0} 次
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '16px' }}>🕐</span>
+                                <span><strong>最后活跃:</strong></span>
+                                <span style={{ color: '#1890ff' }}>
+                                  {botGuardStatus?.fabuBot?.lastActive ? new Date(botGuardStatus.fabuBot.lastActive).toLocaleString() : '未知'}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '16px' }}>⚡</span>
+                                <span><strong>自动重启:</strong></span>
+                                <Switch 
+                                  checked={botGuardStatus?.fabuBot?.autoRestartEnabled || false} 
+                                  onChange={(checked) => setAutoRestart('fabubot', checked)}
+                                  checkedChildren="开启" 
+                                  unCheckedChildren="关闭"
+                                />
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '16px' }}>🔧</span>
+                                <span><strong>机器人状态:</strong></span>
+                                <Switch 
+                                  checked={botConfigs['fabubot']?.enabled !== undefined ? botConfigs['fabubot'].enabled : true} 
+                                  disabled
+                                  checkedChildren="启用" 
+                                  unCheckedChildren="禁用"
+                                />
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '16px' }}>🔍</span>
+                                <span><strong>健康检查:</strong></span>
+                                <Select 
+                                  value={(botConfigs['fabubot']?.health_check_interval || 30000) / 1000}
+                                  onChange={(value) => updateInterval('fabubot', 'health_check_interval', value * 1000)}
+                                  style={{ width: '85px' }}
+                                >
+                                  <Option value={10}>10s</Option>
+                                  <Option value={30}>30s</Option>
+                                  <Option value={60}>60s</Option>
+                                </Select>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '16px' }}>⏱️</span>
+                                <span><strong>重启间隔:</strong></span>
+                                <Select 
+                                  value={(botConfigs['fabubot']?.auto_restart_interval || 60000) / 1000}
+                                  onChange={(value) => updateInterval('fabubot', 'auto_restart_interval', value * 1000)}
+                                  style={{ width: '85px' }}
+                                >
+                                  <Option value={30}>30s</Option>
+                                  <Option value={60}>60s</Option>
+                                  <Option value={120}>120s</Option>
+                                </Select>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '16px' }}>🎯</span>
+                                <span><strong>最大重启:</strong></span>
+                                <span style={{ color: '#722ed1', fontWeight: 'bold' }}>
+                                  {botConfigs['fabubot']?.max_restart_attempts || 5} 次
+                                </span>
+                              </div>
+                            </div>
+                            <div style={{ marginTop: '16px', display: 'flex', gap: '10px' }}>
+                              <Button 
+                                type="primary" 
+                                icon={<PlayCircleOutlined />}
+                                onClick={() => startSingleBot('fabubot')}
+                                disabled={botGuardStatus?.fabuBot?.isRunning}
+                              >
+                                启动
+                              </Button>
+                              <Button 
+                                danger 
+                                icon={<PauseCircleOutlined />}
+                                onClick={() => stopSingleBot('fabubot')}
+                                disabled={!botGuardStatus?.fabuBot?.isRunning}
+                              >
+                                停止
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              </Spin>
+            )
           }
         ]}
       />
+      
+      {/* 配置编辑 Modal */}
+      <Modal
+        title="编辑守护配置"
+        open={configModalVisible}
+        onCancel={() => setConfigModalVisible(false)}
+        footer={null}
+        width={500}
+        zIndex={1300}
+      >
+        <Form
+          form={guardConfigForm}
+          layout="vertical"
+          onFinish={handleSaveConfig}
+        >
+          <Form.Item
+            label="机器人状态"
+            name="enabled"
+            valuePropName="checked"
+          >
+            <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+          </Form.Item>
+          
+          <Form.Item
+            label="健康检查间隔（秒）"
+            name="health_check_interval"
+            rules={[{ required: true, message: '请输入健康检查间隔' }]}
+          >
+            <InputNumber min={5} max={300} />
+          </Form.Item>
+          
+          <Form.Item
+            label="自动重启间隔（秒）"
+            name="auto_restart_interval"
+            rules={[{ required: true, message: '请输入自动重启间隔' }]}
+          >
+            <InputNumber min={10} max={600} />
+          </Form.Item>
+          
+          <Form.Item
+            label="自动重启"
+            name="auto_restart_enabled"
+            valuePropName="checked"
+          >
+            <Switch checkedChildren="开启" unCheckedChildren="关闭" />
+          </Form.Item>
+          
+          <Form.Item
+            label="最大重启次数"
+            name="max_restart_attempts"
+            rules={[{ required: true, message: '请输入最大重启次数' }]}
+          >
+            <InputNumber min={1} max={20} />
+          </Form.Item>
+          
+          <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
+            <Button onClick={() => setConfigModalVisible(false)} style={{ marginRight: '8px' }}>
+              取消
+            </Button>
+            <Button type="primary" htmlType="submit">
+              保存
+            </Button>
+          </Form.Item>
+        </Form>
+      </Modal>
       
       {/* 媒体组详情 Modal */}
       <Modal

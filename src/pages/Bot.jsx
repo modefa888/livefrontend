@@ -159,10 +159,18 @@ const Bot = () => {
   // BotGuard 相关状态
   const [botGuardStatus, setBotGuardStatus] = useState(null)
   const [botGuardLoading, setBotGuardLoading] = useState(false)
+  const [botConfigs, setBotConfigs] = useState({})
+  const [configModalVisible, setConfigModalVisible] = useState(false)
+  const [editingBot, setEditingBot] = useState(null)
+  const [configForm] = Form.useForm()
   
   // 启动记录相关状态
   const [startupRecords, setStartupRecords] = useState([])
   const [recordsLoading, setRecordsLoading] = useState(false)
+  
+  // Tab懒加载相关状态
+  const [activeTabKey, setActiveTabKey] = useState('status')
+  const [loadedTabs, setLoadedTabs] = useState(new Set(['status']))
   
   // 命令管理
   const [commands, setCommands] = useState([])
@@ -478,8 +486,88 @@ const Bot = () => {
       await api.post(`/api/bot/botguard/autorestart/${botName}`, { enabled })
       message.success(`${botName} 自动重启已${enabled ? '启用' : '禁用'}`)
       fetchBotGuardStatus()
+      fetchBotConfigs()
     } catch (error) {
       message.error(`设置 ${botName} 自动重启失败`)
+      console.error(error)
+    }
+  }
+
+  // 获取守护服务配置
+  const fetchBotConfigs = async () => {
+    try {
+      const response = await api.get('/api/bot/botguard/config')
+      setBotConfigs(response.data.configs || {})
+    } catch (error) {
+      console.error('获取守护服务配置失败:', error)
+    }
+  }
+
+  const updateInterval = async (botName, key, value) => {
+    try {
+      await api.put(`/api/bot/botguard/config/${botName}`, {
+        [key]: value
+      })
+      message.success(`${key === 'health_check_interval' ? '健康检查' : '自动重启'}间隔已更新`)
+      fetchBotConfigs()
+    } catch (error) {
+      message.error('更新间隔失败')
+      console.error(error)
+    }
+  }
+
+  // 打开配置编辑模态框
+  const showConfigModal = (botName) => {
+    setEditingBot(botName)
+    const config = botConfigs[botName]
+    if (config) {
+      configForm.setFieldsValue({
+        health_check_interval: config.health_check_interval ? config.health_check_interval / 1000 : 30,
+        auto_restart_interval: config.auto_restart_interval ? config.auto_restart_interval / 1000 : 60,
+        auto_restart_enabled: config.auto_restart_enabled === 1 || config.auto_restart_enabled === true,
+        enabled: config.enabled === 1 || config.enabled === true,
+        max_restart_attempts: config.max_restart_attempts || 5
+      })
+    } else {
+      configForm.setFieldsValue({
+        health_check_interval: 30,
+        auto_restart_interval: 60,
+        auto_restart_enabled: true,
+        enabled: true,
+        max_restart_attempts: 5
+      })
+    }
+    setConfigModalVisible(true)
+  }
+
+  // 保存配置
+  const handleSaveConfig = async (values) => {
+    try {
+      await api.put(`/api/bot/botguard/config/${editingBot}`, {
+        health_check_interval: values.health_check_interval * 1000,
+        auto_restart_interval: values.auto_restart_interval * 1000,
+        auto_restart_enabled: values.auto_restart_enabled,
+        enabled: values.enabled,
+        max_restart_attempts: values.max_restart_attempts
+      })
+      message.success(`${editingBot} 配置更新成功`)
+      setConfigModalVisible(false)
+      fetchBotConfigs()
+      fetchBotGuardStatus()
+    } catch (error) {
+      message.error(`更新 ${editingBot} 配置失败`)
+      console.error(error)
+    }
+  }
+
+  // 重置重启计数
+  const resetRestartCounts = async () => {
+    try {
+      await api.post('/api/bot/botguard/reset-counts')
+      message.success('重启计数已重置')
+      fetchBotGuardStatus()
+    } catch (error) {
+      message.error('重置重启计数失败')
       console.error(error)
     }
   }
@@ -1350,20 +1438,13 @@ const Bot = () => {
 
   // 初始化时获取数据
   useEffect(() => {
+    // 页面加载时只加载必要的初始数据
     fetchBotStatus()
-    fetchEnvConfig()
-    fetchCommands()
-    fetchUsers()
     fetchStartupRecords()
-    fetchConfig()
-    fetchBotGuardStatus()
     
     // 先从localStorage加载本地机器人消息
     const savedMessages = loadLocalBotMessages()
     setMessages(savedMessages)
-    
-    // 然后获取服务器消息（只添加新消息）
-    fetchMessages()
   }, [])
 
 
@@ -1371,13 +1452,53 @@ const Bot = () => {
 
 
   // 处理标签页切换
-  const handleTabChange = (key) => {
+  const handleTabChange = async (key) => {
     // 检查是否是消息发送标签页
     if (key === 'message' && !botStatus?.isRunning) {
       message.warning('请先启动机器人');
-      return false;
+      return;
     }
-    return true;
+    
+    setActiveTabKey(key);
+    
+    // 如果该tab已经加载过，不再请求
+    if (loadedTabs.has(key)) {
+      return;
+    }
+    
+    // 标记为已加载
+    setLoadedTabs(prev => new Set([...prev, key]));
+    
+    // 根据tab key加载对应数据
+    switch (key) {
+      case 'commands':
+        await fetchCommands();
+        break;
+      case 'users':
+        await fetchUsers();
+        break;
+      case 'groups':
+        await fetchGroups();
+        break;
+      case 'config':
+        await fetchConfig();
+        break;
+      case 'env':
+        await fetchEnvConfig();
+        break;
+      case 'sites':
+        await fetchConfig();
+        break;
+      case 'message':
+        await fetchMessages();
+        break;
+      case 'botguard':
+        await fetchBotGuardStatus();
+        await fetchBotConfigs();
+        break;
+      default:
+        break;
+    }
   };
 
   // 处理状态直接修改
@@ -1498,7 +1619,7 @@ const Bot = () => {
       </div>
       
       <Tabs 
-        defaultActiveKey="status"
+        activeKey={activeTabKey}
         onChange={handleTabChange}
       >
 
@@ -2189,6 +2310,9 @@ const Bot = () => {
                 <Button onClick={handleManualRestart}>
                   手动重启所有
                 </Button>
+                <Button onClick={resetRestartCounts}>
+                  重置重启计数
+                </Button>
               </div>
             }>
               <div style={{ fontSize: '15px', lineHeight: '2.2' }}>
@@ -2223,6 +2347,38 @@ const Bot = () => {
                             style={{ marginLeft: '8px' }}
                           />
                         </p>
+                        <p><strong>机器人状态:</strong> 
+                          <Switch 
+                            checked={botConfigs['livebot']?.enabled !== undefined ? botConfigs['livebot'].enabled : true} 
+                            disabled
+                            checkedChildren="启用" 
+                            unCheckedChildren="禁用"
+                            style={{ marginLeft: '8px' }}
+                          />
+                        </p>
+                        <p><strong>健康检查间隔:</strong> 
+                          <Select 
+                            value={(botConfigs['livebot']?.health_check_interval || 30000) / 1000}
+                            onChange={(value) => updateInterval('livebot', 'health_check_interval', value * 1000)}
+                            style={{ width: '100px', marginLeft: '8px' }}
+                          >
+                            <Option value={10}>10 秒</Option>
+                            <Option value={30}>30 秒</Option>
+                            <Option value={60}>60 秒</Option>
+                          </Select>
+                        </p>
+                        <p><strong>自动重启间隔:</strong> 
+                          <Select 
+                            value={(botConfigs['livebot']?.auto_restart_interval || 60000) / 1000}
+                            onChange={(value) => updateInterval('livebot', 'auto_restart_interval', value * 1000)}
+                            style={{ width: '100px', marginLeft: '8px' }}
+                          >
+                            <Option value={30}>30 秒</Option>
+                            <Option value={60}>60 秒</Option>
+                            <Option value={120}>120 秒</Option>
+                          </Select>
+                        </p>
+                        <p><strong>最大重启次数:</strong> {botConfigs['livebot']?.max_restart_attempts || 5} 次</p>
                         <div style={{ marginTop: '16px', display: 'flex', gap: '10px' }}>
                           <Button 
                             type="primary" 
@@ -2244,101 +2400,7 @@ const Bot = () => {
                       </div>
                     </Card>
                   </div>
-                  <div className="ant-col ant-col-xs-24 ant-col-md-12" style={{ paddingLeft: '8px', paddingRight: '8px' }}>
-                    <Card style={{ height: '100%', background: botGuardStatus?.fabuBot?.isRunning ? '#f6ffed' : '#fff7e6' }}>
-                      <div className="ant-card-head">
-                        <div className="ant-card-head-wrapper">
-                          <div className="ant-card-head-title">📢 FaBuBot 状态</div>
-                          <div className="ant-card-extra">
-                            <Tag 
-                              color={botGuardStatus?.fabuBot?.isRunning ? 'green' : 'orange'} 
-                              style={botGuardStatus?.fabuBot?.isRunning ? {
-                                animation: '2s ease 0s infinite normal none running pulse',
-                                boxShadow: 'rgba(82, 196, 26, 0.5) 0px 0px 10px'
-                              } : {}}
-                            >
-                              {botGuardStatus?.fabuBot?.isRunning ? '🟢 运行中' : '🔴 已停止'}
-                            </Tag>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="ant-card-body">
-                        <p><strong>重启次数:</strong> {botGuardStatus?.fabuBot?.restartCount || 0} 次</p>
-                        <p><strong>最后活跃:</strong> {botGuardStatus?.fabuBot?.lastActive ? new Date(botGuardStatus.fabuBot.lastActive).toLocaleString() : '未知'}</p>
-                        <p><strong>自动重启:</strong> 
-                          <Switch 
-                            checked={botGuardStatus?.fabuBot?.autoRestartEnabled || false} 
-                            onChange={(checked) => setAutoRestart('fabubot', checked)}
-                            checkedChildren="开启" 
-                            unCheckedChildren="关闭"
-                            style={{ marginLeft: '8px' }}
-                          />
-                        </p>
-                        <div style={{ marginTop: '16px', display: 'flex', gap: '10px' }}>
-                          <Button 
-                            type="primary" 
-                            icon={<PlayCircleOutlined />}
-                            onClick={() => startSingleBot('fabubot')}
-                            disabled={botGuardStatus?.fabuBot?.isRunning}
-                          >
-                            启动
-                          </Button>
-                          <Button 
-                            danger 
-                            icon={<PauseCircleOutlined />}
-                            onClick={() => stopSingleBot('fabubot')}
-                            disabled={!botGuardStatus?.fabuBot?.isRunning}
-                          >
-                            停止
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
                   </div>
-                </div>
-                <Divider />
-                <div className="ant-row" style={{ marginLeft: '-8px', marginRight: '-8px', rowGap: '16px', marginTop: '16px' }}>
-                  <div className="ant-col ant-col-xs-24 ant-col-md-8" style={{ paddingLeft: '8px', paddingRight: '8px' }}>
-                    <Card>
-                      <div className="ant-card-head">
-                        <div className="ant-card-head-wrapper">
-                          <div className="ant-card-head-title">⚙️ 服务运行</div>
-                        </div>
-                      </div>
-                      <div className="ant-card-body">
-                        <p style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                          <Tag color={botGuardStatus?.guardRunning ? 'green' : 'red'}>
-                            {botGuardStatus?.guardRunning ? '🟢 运行中' : '🔴 已停止'}
-                          </Tag>
-                        </p>
-                      </div>
-                    </Card>
-                  </div>
-                  <div className="ant-col ant-col-xs-24 ant-col-md-8" style={{ paddingLeft: '8px', paddingRight: '8px' }}>
-                    <Card>
-                      <div className="ant-card-head">
-                        <div className="ant-card-head-wrapper">
-                          <div className="ant-card-head-title">🔍 健康检查</div>
-                        </div>
-                      </div>
-                      <div className="ant-card-body">
-                        <p style={{ fontSize: '18px', fontWeight: 'bold' }}>{botGuardStatus?.healthCheckInterval || '30 秒'}</p>
-                      </div>
-                    </Card>
-                  </div>
-                  <div className="ant-col ant-col-xs-24 ant-col-md-8" style={{ paddingLeft: '8px', paddingRight: '8px' }}>
-                    <Card>
-                      <div className="ant-card-head">
-                        <div className="ant-card-head-wrapper">
-                          <div className="ant-card-head-title">🔄 自动重启</div>
-                        </div>
-                      </div>
-                      <div className="ant-card-body">
-                        <p style={{ fontSize: '18px', fontWeight: 'bold' }}>{botGuardStatus?.autoRestartInterval || '60 秒'}</p>
-                      </div>
-                    </Card>
-                  </div>
-                </div>
               </div>
             </Card>
           </Spin>
@@ -2437,6 +2499,63 @@ const Bot = () => {
       >
         <p>确定要删除命令 <strong>{commandToDelete}</strong> 吗？</p>
         <p style={{ color: '#f5222d', marginTop: '8px' }}>此操作无法撤销！</p>
+      </Modal>
+
+      {/* 配置编辑模态框 */}
+      <Modal
+        title={`${editingBot === 'livebot' ? '🤖' : '📢'} ${editingBot === 'livebot' ? 'LiveBot' : 'FaBuBot'} 配置`}
+        open={configModalVisible}
+        onCancel={() => setConfigModalVisible(false)}
+        onOk={() => configForm.submit()}
+        width={500}
+      >
+        <Form
+          form={configForm}
+          layout="vertical"
+          onFinish={handleSaveConfig}
+        >
+          <Form.Item
+            name="enabled"
+            label="机器人状态"
+            rules={[{ required: true, message: '请选择机器人状态' }]}
+          >
+            <Select>
+              <Option value={true}>启用</Option>
+              <Option value={false}>禁用</Option>
+            </Select>
+          </Form.Item>
+          <Form.Item
+            name="health_check_interval"
+            label="健康检查间隔（秒）"
+            rules={[{ required: true, message: '请输入健康检查间隔', type: 'number', min: 1 }]}
+          >
+            <Input type="number" placeholder="请输入健康检查间隔（秒）" />
+          </Form.Item>
+          <Form.Item
+            name="auto_restart_interval"
+            label="自动重启间隔（秒）"
+            rules={[{ required: true, message: '请输入自动重启间隔', type: 'number', min: 1 }]}
+          >
+            <Input type="number" placeholder="请输入自动重启间隔（秒）" />
+          </Form.Item>
+          <Form.Item
+            name="auto_restart_enabled"
+            label="自动重启"
+            rules={[{ required: true, message: '请选择是否启用自动重启' }]}
+          >
+            <Select>
+              <Option value={true}>启用</Option>
+              <Option value={false}>禁用</Option>
+            </Select>
+          </Form.Item>
+          <Form.Item
+            name="max_restart_attempts"
+            label="最大重启次数"
+            rules={[{ required: true, message: '请输入最大重启次数', type: 'number', min: 1 }]}
+          >
+            <Input type="number" placeholder="请输入最大重启次数" />
+          </Form.Item>
+        </Form>
       </Modal>
 
     </div>
