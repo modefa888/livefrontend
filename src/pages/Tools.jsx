@@ -348,13 +348,10 @@ const Tools = () => {
   }
 
   // 下载备份文件
-  const downloadBackup = async (backupId) => {
+  const downloadBackup = async (backupId, type = 'auto') => {
     try {
-      
-      const response = await api.get(`/api/tools/system/backup/${backupId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
+
+      const response = await api.get(`/api/tools/system/backup/${backupId}?type=${type}`, {
         responseType: 'blob'
       })
       
@@ -362,22 +359,22 @@ const Tools = () => {
       const url = window.URL.createObjectURL(new Blob([response.data]))
       const link = document.createElement('a')
       link.href = url
-      // 从响应头中获取文件名
+      // 从响应头中获取文件名（支持 RFC 5987 编码）
       const contentDisposition = response.headers['content-disposition']
-      let fileName = 'backup.sql'
+      let fileName = 'backup'
       if (contentDisposition) {
-        const match = contentDisposition.match(/filename=(.*)/)
+        const match = contentDisposition.match(/filename\*=UTF-8''(.*)/)
         if (match) {
-          fileName = match[1]
+          fileName = decodeURIComponent(match[1])
         }
       }
       link.setAttribute('download', fileName)
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      message.success('备份文件下载成功')
+      message.success(`备份文件${type === 'compressed' ? '（压缩版）' : ''}下载成功`)
     } catch (error) {
-      message.error('下载备份文件失败')
+      message.error(`下载备份文件${type === 'compressed' ? '（压缩版）' : ''}失败`)
       console.error(error)
     }
   }
@@ -402,6 +399,7 @@ const Tools = () => {
       
       setBackupResult(response.data)
       message.success('后端代码备份成功')
+      fetchBackupRecords()
     } catch (error) {
       message.error('备份后端代码失败')
       console.error(error)
@@ -421,6 +419,7 @@ const Tools = () => {
       
       setFrontendBackupResult(response.data)
       message.success('前端代码备份成功')
+      fetchBackupRecords()
     } catch (error) {
       message.error('备份前端代码失败')
       console.error(error)
@@ -450,6 +449,7 @@ const Tools = () => {
         frontendBackup: frontendResponse.data
       })
       message.success('前后端代码备份成功')
+      fetchBackupRecords()
     } catch (error) {
       message.error('备份前后端代码失败')
       console.error(error)
@@ -957,89 +957,6 @@ const Tools = () => {
                 </Form>
               </Card>
             </div>
-
-            <div style={{ marginTop: '20px' }}>
-              <Card title="备份记录">
-                <Spin spinning={backupLoading}>
-                  <Table 
-                    columns={[
-                      {
-                        title: '备份文件名',
-                        dataIndex: 'backupFileName',
-                        key: 'backupFileName'
-                      },
-                      {
-                        title: '文件大小',
-                        dataIndex: 'fileSize',
-                        key: 'fileSize',
-                        render: (fileSize) => formatFileSize(fileSize)
-                      },
-                      {
-                        title: '备份时间',
-                        dataIndex: 'backupTime',
-                        key: 'backupTime',
-                        render: (backupTime) => new Date(backupTime).toLocaleString()
-                      },
-                      {
-                        title: '创建者',
-                        dataIndex: 'createdBy',
-                        key: 'createdBy'
-                      },
-                      {
-                        title: '操作',
-                        key: 'action',
-                        render: (_, record) => (
-                          <Button type="link" onClick={() => downloadBackup(record.id)}>
-                            下载
-                          </Button>
-                        )
-                      }
-                    ]} 
-                    dataSource={backupRecords} 
-                    rowKey="id" 
-                  />
-                </Spin>
-              </Card>
-            </div>
-            
-            <div style={{ marginTop: '20px' }}>
-              <Card title="代码备份记录">
-                <Table 
-                  columns={[
-                    {
-                      title: '备份文件名',
-                      dataIndex: 'backupFileName',
-                      key: 'backupFileName'
-                    },
-                    {
-                      title: '类型',
-                      dataIndex: 'type',
-                      key: 'type',
-                      render: (type) => type === 'backend' ? '后端' : '前端'
-                    },
-                    {
-                      title: '文件大小',
-                      dataIndex: 'fileSize',
-                      key: 'fileSize',
-                      render: (fileSize) => formatFileSize(fileSize)
-                    },
-                    {
-                      title: '备份时间',
-                      dataIndex: 'backupTime',
-                      key: 'backupTime',
-                      render: (backupTime) => new Date(backupTime).toLocaleString()
-                    },
-                    {
-                      title: '创建者',
-                      dataIndex: 'createdBy',
-                      key: 'createdBy'
-                    }
-                  ]} 
-                  dataSource={codeBackupRecords} 
-                  rowKey="id" 
-                />
-              </Card>
-            </div>
           </Spin>
         </TabPane>
         
@@ -1415,6 +1332,63 @@ const Tools = () => {
                 </div>
               </TabPane>
             </Tabs>
+            
+            <div style={{ marginTop: '20px' }}>
+              <Card title="备份记录" extra={<Button type="link" onClick={fetchBackupRecords} loading={backupLoading}>刷新</Button>}>
+                <Spin spinning={backupLoading}>
+                  <Table 
+                    columns={[
+                      {
+                        title: '备份文件名',
+                        dataIndex: 'backupFileName',
+                        key: 'backupFileName'
+                      },
+                      {
+                        title: '类型',
+                        dataIndex: 'type',
+                        key: 'type',
+                        render: (type) => type === 'backend' ? '后端' : type === 'frontend' ? '前端' : '数据库'
+                      },
+                      {
+                        title: '文件大小',
+                        dataIndex: 'fileSize',
+                        key: 'fileSize',
+                        render: (fileSize) => formatFileSize(fileSize)
+                      },
+                      {
+                        title: '备份时间',
+                        dataIndex: 'backupTime',
+                        key: 'backupTime',
+                        render: (backupTime) => new Date(backupTime).toLocaleString()
+                      },
+                      {
+                        title: '创建者',
+                        dataIndex: 'createdBy',
+                        key: 'createdBy'
+                      },
+                      {
+                        title: '操作',
+                        key: 'action',
+                        render: (_, record) => (
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <Button type="link" onClick={() => downloadBackup(record.id)}>
+                              下载
+                            </Button>
+                            {record.backupFileName.endsWith('.sql') && record.compressedFileName && (
+                              <Button type="link" onClick={() => downloadBackup(record.id, 'compressed')}>
+                                下载压缩
+                              </Button>
+                            )}
+                          </div>
+                        )
+                      }
+                    ]} 
+                    dataSource={backupRecords} 
+                    rowKey="id" 
+                  />
+                </Spin>
+              </Card>
+            </div>
           </Card>
         </TabPane>
         
