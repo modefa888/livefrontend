@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom'
 import { Layout, Menu, Button, Dropdown, Avatar, message, Spin } from 'antd'
-import { HomeOutlined, UserOutlined, SettingOutlined, MonitorOutlined, LogoutOutlined, UserAddOutlined, TeamOutlined, FileTextOutlined, MessageOutlined, RobotOutlined, BugOutlined, ToolOutlined, VideoCameraOutlined, BellOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
+import { HomeOutlined, UserOutlined, SettingOutlined, MonitorOutlined, LogoutOutlined, UserAddOutlined, TeamOutlined, FileTextOutlined, MessageOutlined, RobotOutlined, BugOutlined, ToolOutlined, VideoCameraOutlined, BellOutlined, MenuFoldOutlined, MenuUnfoldOutlined, ApiOutlined } from '@ant-design/icons'
 import api from './utils/api'
 import { BotLoadingProvider } from './contexts/BotLoadingContext'
 
@@ -19,6 +19,7 @@ import Messages from './pages/Messages'
 import Monitor from './pages/Monitor'
 import MonitorStats from './pages/MonitorStats'
 import Spider from './pages/Spider'
+import SpiderAPI from './pages/SpiderAPI'
 import Tools from './pages/Tools'
 import Bot from './pages/Bot'
 import BotSelect from './pages/BotSelect'
@@ -196,6 +197,13 @@ function App() {
       label: '爬虫管理',
       path: '/spider',
       modulePath: '/spider'
+    },
+    {
+      key: 'spider-api',
+      icon: <ApiOutlined />,
+      label: '爬虫接口',
+      path: '/spider-api',
+      modulePath: '/spider-api'
     },
     {
       key: 'tools',
@@ -680,6 +688,7 @@ const NavigationMenu = ({ menuItems, isLoading }) => {
                     <Route path="/monitor" element={<Monitor />} />
                     <Route path="/monitor-stats" element={<MonitorStats />} />
                     <Route path="/spider" element={<Spider />} />
+                    <Route path="/spider-api" element={<SpiderAPI />} />
                     <Route path="/tools" element={<Tools />} />
                     <Route path="/bot" element={<BotSelect />} />
                     <Route path="/bot/livebot" element={<Bot />} />
