@@ -1,9 +1,103 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Row, Col, Statistic, Spin, message, List, Avatar, Tag, Progress, Badge, Tooltip, Image } from 'antd'
+import { Card, Row, Col, Statistic, Spin, message, List, Avatar, Tag, Progress, Badge, Tooltip, Image as AntImage } from 'antd'
 import { UserOutlined, VideoCameraOutlined, SettingOutlined, FileTextOutlined, CheckCircleOutlined, EditOutlined, DeleteOutlined, PlusOutlined, RobotOutlined, MessageOutlined, TeamOutlined, LogoutOutlined, DatabaseOutlined, BarChartOutlined, BellOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import api from '../utils/api'
 import packageData from '../../package.json'
+
+const ResponsiveImage = ({ src, alt }) => {
+  const [isLandscape, setIsLandscape] = useState(true)
+  const [showPreview, setShowPreview] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
+  
+  useEffect(() => {
+    const img = new window.Image()
+    img.onload = () => {
+      setIsLandscape(img.width >= img.height)
+    }
+    img.src = src
+  }, [src])
+  
+  const handleClosePreview = (e) => {
+    if (e.target.id === 'preview-overlay') {
+      setShowPreview(false)
+    }
+  }
+  
+  return (
+    <>
+      <div 
+        style={{ 
+          flexShrink: 0, 
+          borderRadius: '8px', 
+          overflow: 'hidden', 
+          boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+          width: isLandscape ? '180px' : '120px',
+          height: isLandscape ? '130px' : '180px',
+          position: 'relative',
+          cursor: 'pointer'
+        }}
+        onClick={() => setShowPreview(true)}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <img 
+          src={src} 
+          alt={alt} 
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+        <div 
+          style={{ 
+            position: 'absolute', 
+            bottom: 0, 
+            left: 0, 
+            right: 0, 
+            padding: '8px', 
+            background: 'linear-gradient(transparent, rgba(0,0,0,0.6))', 
+            color: '#fff', 
+            fontSize: '12px',
+            textAlign: 'center',
+            opacity: isHovered ? 1 : 0,
+            transition: 'opacity 0.2s ease'
+          }}
+        >
+          点击放大
+        </div>
+      </div>
+      
+      {showPreview && (
+        <div 
+          id="preview-overlay"
+          style={{ 
+            position: 'fixed', 
+            top: 0, 
+            left: 0, 
+            right: 0, 
+            bottom: 0, 
+            background: 'rgba(0,0,0,0.8)', 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            zIndex: 9999,
+            cursor: 'pointer'
+          }}
+          onClick={handleClosePreview}
+        >
+          <img 
+            src={src} 
+            alt={alt} 
+            style={{ 
+              maxWidth: '90%', 
+              maxHeight: '90%', 
+              objectFit: 'contain',
+              borderRadius: '8px'
+            }}
+          />
+        </div>
+      )}
+    </>
+  )
+}
 
 function Dashboard() {
   const navigate = useNavigate()
@@ -408,47 +502,38 @@ function Dashboard() {
         <Col span={24}>
           <Card title="今天直播记录" extra={<VideoCameraOutlined />}>
             {todayLiveRecords.length > 0 ? (
-              <div style={{ maxHeight: '400px', overflowY: 'auto', overflowX: 'hidden' }}>
+              <div style={{ maxHeight: '500px', overflowY: 'auto', overflowX: 'hidden' }}>
                 <Row gutter={[16, 16]}>
                   {todayLiveRecords.map((record, index) => (
-                    <Col key={record.id || index} span={12}>
-                      <Card hoverable style={{ height: '100%' }}>
-                        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                          {/* 左侧信息 */}
-                          <div style={{ flex: 1, minWidth: '0' }}>
-                            <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
-                              <span style={{ fontWeight: 'bold', flex: 1, minWidth: '0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{record.username}</span>
-                              <Tag color="green" style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginLeft: '8px' }}>{record.title}</Tag>
+                    <Col key={record.id || index} span={24} sm={12}>
+                      <Card hoverable style={{ height: '100%', transition: 'all 0.3s ease', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+                          {/* 左侧大图 */}
+                          {record.pic && <ResponsiveImage src={record.pic} alt={record.username} />}
+                          {/* 右侧信息 */}
+                          <div style={{ flex: 1, minWidth: '0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                            <div>
+                              <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                                <span style={{ fontWeight: '600', fontSize: '16px', flex: 1, minWidth: '0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#1f1f1f' }}>{record.username}</span>
+                                <Tag color="green" style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{record.title}</Tag>
+                              </div>
+                              <div style={{ marginBottom: '8px', wordBreak: 'break-all' }}>
+                                <p style={{ margin: '4px 0', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                                  <span style={{ color: '#8c8c8c' }}>平台: {record.site}</span>
+                                  {record.targetUrl && (
+                                    <span>
+                                      <a href={record.targetUrl} target="_blank" rel="noopener noreferrer" style={{ whiteSpace: 'nowrap', color: '#1890ff' }}>前往直播间</a>
+                                    </span>
+                                  )}
+                                </p>
+                                <p style={{ margin: '4px 0', color: '#8c8c8c', fontSize: '13px' }}>日期: {record.day}</p>
+                              </div>
                             </div>
-                            <div style={{ marginBottom: '8px', wordBreak: 'break-all' }}>
-                              <p style={{ margin: '4px 0', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-                                <span>平台: {record.site}</span>
-                                {record.targetUrl && (
-                                  <span>
-                                    <a href={record.targetUrl} target="_blank" rel="noopener noreferrer" style={{ whiteSpace: 'nowrap' }}>前往直播间</a>
-                                  </span>
-                                )}
-                              </p>
-                              <p style={{ margin: '4px 0' }}>日期: {record.day}</p>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#666', flexWrap: 'wrap', gap: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#8c8c8c', flexWrap: 'wrap', gap: '8px' }}>
                               <span>开始: {formatDate(record.startLive)}</span>
-                              <span>结束: <span style={{ color: '#ff4d4f' }}>{formatDate(record.endLive)}</span></span>
+                              <span>结束: <span style={{ color: '#ff4d4f' }}>{formatDate(record.endLive) || '-'}</span></span>
                             </div>
                           </div>
-                          {/* 右侧图片 */}
-                          {record.pic && (
-                            <div style={{ width: '80px', height: '80px', flexShrink: 0 }}>
-                              <Image 
-                                src={record.pic} 
-                                alt={record.username} 
-                                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }}
-                                preview={{
-                                  mask: '点击放大'
-                                }}
-                              />
-                            </div>
-                          )}
                         </div>
                       </Card>
                     </Col>

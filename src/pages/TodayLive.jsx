@@ -1,7 +1,30 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Row, Col, Spin, message, Tag, Tooltip, Tabs, Button, Image } from 'antd'
+import { Card, Row, Col, Spin, message, Tag, Tooltip, Tabs, Button, Image as AntImage } from 'antd'
 import { VideoCameraOutlined, LinkOutlined } from '@ant-design/icons'
 import api from '../utils/api'
+
+const ResponsiveImage = ({ src, alt }) => {
+  const [isLandscape, setIsLandscape] = useState(true)
+  
+  useEffect(() => {
+    const img = new window.Image()
+    img.onload = () => {
+      setIsLandscape(img.width >= img.height)
+    }
+    img.src = src
+  }, [src])
+  
+  return (
+    <div style={{ flex: 1, flexShrink: 0, width: '120px', height: '180px', borderRadius: '4px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f5f5' }}>
+      <AntImage 
+        src={src} 
+        alt={alt} 
+        style={{ width: isLandscape ? '100%' : 'auto', height: isLandscape ? '100%' : '100%', objectFit: isLandscape ? 'cover' : 'contain', objectPosition: 'center' }}
+        preview={{ mask: '点击放大' }}
+      />
+    </div>
+  )
+}
 
 const { TabPane } = Tabs
 
@@ -189,18 +212,7 @@ function TodayLive() {
       <Card hoverable style={{ height: '100%', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' }}>
         <div style={{ display: 'flex', gap: '12px', height: '100%', flexWrap: 'wrap' }}>
           {/* 左侧图片 */}
-          {record.pic && (
-            <div style={{ flex: 1, flexShrink: 0, maxWidth: '120px', display: 'flex', alignItems: 'center' }}>
-              <Image 
-                src={record.pic} 
-                alt={record.username} 
-                style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '4px' }}
-                preview={{
-                  mask: '点击放大'
-                }}
-              />
-            </div>
-          )}
+          {record.pic && <ResponsiveImage src={record.pic} alt={record.username} />}
           {/* 右侧信息 */}
           <div style={{ flex: 1, minWidth: '0', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
