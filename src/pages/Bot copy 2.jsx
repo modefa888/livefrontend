@@ -1819,7 +1819,7 @@ const Bot = () => {
         </TabPane>
         
         <TabPane 
-          tab="⌨️ 命令管理" 
+          tab="命令管理" 
           key="commands"
         >
           <Spin spinning={commandsLoading}>
@@ -1930,7 +1930,7 @@ const Bot = () => {
         </TabPane>
         
         <TabPane 
-          tab="💬 消息发送" 
+          tab="消息发送" 
           key="message"
           disabled={!botStatus?.isRunning}
         >
@@ -2096,7 +2096,7 @@ const Bot = () => {
         </TabPane>
         
         <TabPane 
-          tab="📨 消息管理" 
+          tab="消息管理" 
           key="messages"
           disabled={!botStatus?.isRunning}
         >
@@ -2390,12 +2390,15 @@ const Bot = () => {
           </Spin>
         </TabPane>
         
-        <TabPane tab="🔒 守护服务" key="botguard">
+        <TabPane tab="守护服务" key="botguard">
           <Spin spinning={botGuardLoading}>
             <Card title="🔒 机器人守护服务" extra={
               <div style={{ display: 'flex', gap: '10px' }}>
                 <Button type="primary" onClick={fetchBotGuardStatus} loading={botGuardLoading}>
                   刷新状态
+                </Button>
+                <Button onClick={handleManualRestart}>
+                  手动重启所有
                 </Button>
                 <Button onClick={resetRestartCounts}>
                   重置重启计数
@@ -2423,75 +2426,49 @@ const Bot = () => {
                         </div>
                       </div>
                       <div className="ant-card-body">
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '14px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '16px' }}>🔄</span>
-                            <span><strong>重启次数:</strong></span>
-                            <span style={{ color: botGuardStatus?.livebot?.restartCount > 0 ? '#fa8c16' : '#52c41a', fontWeight: 'bold' }}>
-                              {botGuardStatus?.livebot?.restartCount || 0} 次
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '16px' }}>🕐</span>
-                            <span><strong>最后活跃:</strong></span>
-                            <span style={{ color: '#1890ff' }}>
-                              {botGuardStatus?.livebot?.lastActive ? new Date(botGuardStatus.livebot.lastActive).toLocaleString() : '未知'}
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '16px' }}>⚡</span>
-                            <span><strong>自动重启:</strong></span>
-                            <Switch 
-                              checked={botGuardStatus?.livebot?.autoRestartEnabled || false} 
-                              onChange={(checked) => setAutoRestart('livebot', checked)}
-                              checkedChildren="开启" 
-                              unCheckedChildren="关闭"
-                            />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '16px' }}>🔧</span>
-                            <span><strong>机器人状态:</strong></span>
-                            <Switch 
-                              checked={botConfigs['livebot']?.enabled !== undefined ? botConfigs['livebot'].enabled : true} 
-                              disabled
-                              checkedChildren="启用" 
-                              unCheckedChildren="禁用"
-                            />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '16px' }}>🔍</span>
-                            <span><strong>健康检查:</strong></span>
-                            <Select 
-                              value={(botConfigs['livebot']?.health_check_interval || 30000) / 1000}
-                              onChange={(value) => updateInterval('livebot', 'health_check_interval', value * 1000)}
-                              style={{ width: '85px' }}
-                            >
-                              <Option value={10}>10s</Option>
-                              <Option value={30}>30s</Option>
-                              <Option value={60}>60s</Option>
-                            </Select>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '16px' }}>⏱️</span>
-                            <span><strong>重启间隔:</strong></span>
-                            <Select 
-                              value={(botConfigs['livebot']?.auto_restart_interval || 60000) / 1000}
-                              onChange={(value) => updateInterval('livebot', 'auto_restart_interval', value * 1000)}
-                              style={{ width: '85px' }}
-                            >
-                              <Option value={30}>30s</Option>
-                              <Option value={60}>60s</Option>
-                              <Option value={120}>120s</Option>
-                            </Select>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '16px' }}>🎯</span>
-                            <span><strong>最大重启:</strong></span>
-                            <span style={{ color: '#722ed1', fontWeight: 'bold' }}>
-                              {botConfigs['livebot']?.max_restart_attempts || 5} 次
-                            </span>
-                          </div>
-                        </div>
+                        <p><strong>重启次数:</strong> {botGuardStatus?.livebot?.restartCount || 0} 次</p>
+                        <p><strong>最后活跃:</strong> {botGuardStatus?.livebot?.lastActive ? new Date(botGuardStatus.livebot.lastActive).toLocaleString() : '未知'}</p>
+                        <p><strong>自动重启:</strong> 
+                          <Switch 
+                            checked={botGuardStatus?.livebot?.autoRestartEnabled || false} 
+                            onChange={(checked) => setAutoRestart('livebot', checked)}
+                            checkedChildren="开启" 
+                            unCheckedChildren="关闭"
+                            style={{ marginLeft: '8px' }}
+                          />
+                        </p>
+                        <p><strong>机器人状态:</strong> 
+                          <Switch 
+                            checked={botConfigs['livebot']?.enabled !== undefined ? botConfigs['livebot'].enabled : true} 
+                            disabled
+                            checkedChildren="启用" 
+                            unCheckedChildren="禁用"
+                            style={{ marginLeft: '8px' }}
+                          />
+                        </p>
+                        <p><strong>健康检查间隔:</strong> 
+                          <Select 
+                            value={(botConfigs['livebot']?.health_check_interval || 30000) / 1000}
+                            onChange={(value) => updateInterval('livebot', 'health_check_interval', value * 1000)}
+                            style={{ width: '100px', marginLeft: '8px' }}
+                          >
+                            <Option value={10}>10 秒</Option>
+                            <Option value={30}>30 秒</Option>
+                            <Option value={60}>60 秒</Option>
+                          </Select>
+                        </p>
+                        <p><strong>自动重启间隔:</strong> 
+                          <Select 
+                            value={(botConfigs['livebot']?.auto_restart_interval || 60000) / 1000}
+                            onChange={(value) => updateInterval('livebot', 'auto_restart_interval', value * 1000)}
+                            style={{ width: '100px', marginLeft: '8px' }}
+                          >
+                            <Option value={30}>30 秒</Option>
+                            <Option value={60}>60 秒</Option>
+                            <Option value={120}>120 秒</Option>
+                          </Select>
+                        </p>
+                        <p><strong>最大重启次数:</strong> {botConfigs['livebot']?.max_restart_attempts || 5} 次</p>
                         <div style={{ marginTop: '16px', display: 'flex', gap: '10px' }}>
                           <Button 
                             type="primary" 
@@ -2513,13 +2490,13 @@ const Bot = () => {
                       </div>
                     </Card>
                   </div>
-                </div>
+                  </div>
               </div>
             </Card>
           </Spin>
         </TabPane>
 
-        <TabPane tab="⚙️ 配置管理" key="config">
+        <TabPane tab="配置管理" key="config">
           <Spin spinning={configLoading}>
             <Card style={{ marginBottom: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2533,23 +2510,23 @@ const Bot = () => {
             </Card>
 
             <Tabs activeKey={configActiveTab} onChange={setConfigActiveTab}>
-              <TabPane tab="🏠 本地环境配置" key="environment">
+              <TabPane tab="本地环境配置" key="environment">
                 {renderEnvironmentForm('local')}
               </TabPane>
-              <TabPane tab="🌐 生产环境配置" key="server">
+              <TabPane tab="生产环境配置" key="server">
                 {renderEnvironmentForm('server')}
               </TabPane>
-              <TabPane tab="⚙️ 系统设置" key="settings">
+              <TabPane tab="系统设置" key="settings">
                 {renderSettingsForm()}
               </TabPane>
-              <TabPane tab="🌐 网站配置" key="sites">
+              <TabPane tab="网站配置" key="sites">
                 {renderSiteForm()}
               </TabPane>
             </Tabs>
           </Spin>
         </TabPane>
 
-        <TabPane tab="📝 解析记录" key="parseRecords">
+        <TabPane tab="解析记录" key="parseRecords">
           <Spin spinning={parseRecordsLoading}>
             <Card title="📝 解析记录" extra={
               <Button onClick={fetchParseRecords} loading={parseRecordsLoading}>

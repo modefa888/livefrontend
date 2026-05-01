@@ -1565,7 +1565,7 @@ const FaBuBot = () => {
           },
           {
             key: 'media-groups',
-            label: '媒体组管理',
+            label: '📁 媒体组管理',
             children: (
               <Spin spinning={mediaGroupsLoading}>
                 <Card 
@@ -1634,7 +1634,7 @@ const FaBuBot = () => {
           },
           {
             key: 'single-videos',
-            label: '单个视频管理',
+            label: '🎬 单个视频管理',
             children: (
               <Spin spinning={singleVideosLoading}>
                 <Card 
@@ -1709,7 +1709,7 @@ const FaBuBot = () => {
           },
           {
             key: 'config',
-            label: '配置管理',
+            label: '⚙️ 配置管理',
             children: (
               <Spin spinning={configLoading}>
                 <Card style={{ marginBottom: 20 }}>
@@ -1796,7 +1796,7 @@ const FaBuBot = () => {
           },
           {
             key: 'commands',
-            label: '命令管理',
+            label: '⌨️ 命令管理',
             children: (
               <Spin spinning={commandsLoading}>
                 <Card 
@@ -1915,7 +1915,7 @@ const FaBuBot = () => {
           },
           {
             key: 'users',
-            label: '用户管理',
+            label: '👥 用户管理',
             children: (
               <Spin spinning={usersLoading}>
                 <Card 
@@ -2047,7 +2047,7 @@ const FaBuBot = () => {
           },
           {
             key: 'groups',
-            label: '群组管理',
+            label: '👥 群组管理',
             children: (
               <Spin spinning={groupsLoading}>
                 <Card 
@@ -2170,7 +2170,7 @@ const FaBuBot = () => {
           },
           {
             key: 'botguard',
-            label: '守护服务',
+            label: '🔒 守护服务',
             children: (
               <Spin spinning={botGuardLoading}>
                 <Card title="🔒 机器人守护服务" extra={
@@ -2867,7 +2867,7 @@ const FaBuBot = () => {
             关闭
           </Button>
         ]}
-        width={800}
+        width={1200}
         zIndex={1000}
       >
         <Spin spinning={mediaItemsLoading}>
@@ -2927,7 +2927,7 @@ const FaBuBot = () => {
                   title: 'ID',
                   dataIndex: 'id',
                   key: 'id',
-                  width: 15
+                  width: 60
                 },
                 {
                   title: '类型',
@@ -2949,6 +2949,7 @@ const FaBuBot = () => {
                   dataIndex: 'file_id',
                   key: 'file_id',
                   ellipsis: true,
+                  width: 200,
                   render: (fileId, record) => (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span>{fileId ? `...${fileId.slice(-8)}` : '-'}</span>
@@ -2967,6 +2968,7 @@ const FaBuBot = () => {
                   dataIndex: 'caption',
                   key: 'caption',
                   ellipsis: true,
+                  width: 300,
                   render: (caption, record) => {
                     return (
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flexWrap: 'wrap' }}>

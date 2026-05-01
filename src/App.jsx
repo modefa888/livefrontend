@@ -227,19 +227,12 @@ function App() {
       modulePath: '/logs'
     },
     {
-      key: 'parse-records',
-      icon: <VideoCameraOutlined />,
-      label: '解析管理',
-      path: '/parse-records',
-      modulePath: '/parse-records'
-    },
-    {
-      key: 'messages',
-      icon: <MessageOutlined />,
-      label: '消息记录',
-      path: '/messages',
-      modulePath: '/messages'
-    },
+          key: 'messages',
+          icon: <MessageOutlined />,
+          label: '消息记录',
+          path: '/messages',
+          modulePath: '/messages'
+        },
     {
       key: 'settings',
       icon: <SettingOutlined />,
