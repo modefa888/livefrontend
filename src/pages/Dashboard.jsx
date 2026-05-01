@@ -104,6 +104,7 @@ function Dashboard() {
   const [stats, setStats] = useState(null)
   const [recentOperations, setRecentOperations] = useState([])
   const [botStatus, setBotStatus] = useState(null)
+  const [botGuardStatus, setBotGuardStatus] = useState(null)
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState(null)
   const [todayLiveRecords, setTodayLiveRecords] = useState([])
@@ -181,6 +182,15 @@ function Dashboard() {
       }
     }
 
+    const fetchBotGuardStatus = async () => {
+      try {
+        const response = await api.get('/api/bot/botguard/status')
+        setBotGuardStatus(response.data)
+      } catch (error) {
+        console.error('获取 BotGuard 状态失败:', error)
+      }
+    }
+
     const fetchTodayLiveRecords = async () => {
       try {
         const response = await api.get('/api/logs/live-history')
@@ -219,7 +229,7 @@ function Dashboard() {
 
     const fetchData = async () => {
       try {
-        await Promise.all([fetchStats(), fetchRecentOperations(), fetchBotStatus(), fetchTodayLiveRecords(), fetchSystemStatus()])
+        await Promise.all([fetchStats(), fetchRecentOperations(), fetchBotStatus(), fetchTodayLiveRecords(), fetchSystemStatus(), fetchBotGuardStatus()])
       } finally {
         setLoading(false)
       }
@@ -434,8 +444,15 @@ function Dashboard() {
                     }
                   </div>
                   <div style={{ marginBottom: '12px' }}>
-                    <span style={{ marginRight: '8px' }}>🤖 机器人状态:</span>
-                    {botStatus?.isRunning ? 
+                    <span style={{ marginRight: '8px' }}>🤖 LiveBot 状态:</span>
+                    {botGuardStatus?.livebot?.isRunning ? 
+                      <Badge status="success" text="运行中" /> : 
+                      <Badge status="error" text="已停止" />
+                    }
+                  </div>
+                  <div style={{ marginBottom: '12px' }}>
+                    <span style={{ marginRight: '8px' }}>🤖 FaBuBot 状态:</span>
+                    {botGuardStatus?.fabuBot?.isRunning ? 
                       <Badge status="success" text="运行中" /> : 
                       <Badge status="error" text="已停止" />
                     }
@@ -608,17 +625,29 @@ function Dashboard() {
                   }
                 </div>
                 <div style={{ marginBottom: '12px' }}>
-                  <span style={{ width: '120px', display: 'inline-block' }}>机器人服务:</span>
-                  {botStatus?.isRunning ? 
+                  <span style={{ width: '120px', display: 'inline-block' }}>LiveBot:</span>
+                  {botGuardStatus?.livebot?.isRunning ? 
+                    <Badge status="success" text="运行中" /> : 
+                    <Badge status="error" text="已停止" />
+                  }
+                </div>
+                <div style={{ marginBottom: '12px' }}>
+                  <span style={{ width: '120px', display: 'inline-block' }}>FaBuBot:</span>
+                  {botGuardStatus?.fabuBot?.isRunning ? 
                     <Badge status="success" text="运行中" /> : 
                     <Badge status="error" text="已停止" />
                   }
                 </div>
               </div>
               
-              {botStatus?.error && (
+              {(botGuardStatus?.livebot?.error || botGuardStatus?.fabuBot?.error) && (
                 <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: '#fff2f0', border: '1px solid #ffccc7', borderRadius: '4px' }}>
-                  <p style={{ margin: 0, color: '#cf1322' }}>⚠️ 机器人错误: {botStatus.error}</p>
+                  {botGuardStatus?.livebot?.error && (
+                    <p style={{ margin: '0 0 8px 0', color: '#cf1322' }}>⚠️ LiveBot错误: {botGuardStatus.livebot.error}</p>
+                  )}
+                  {botGuardStatus?.fabuBot?.error && (
+                    <p style={{ margin: 0, color: '#cf1322' }}>⚠️ FaBuBot错误: {botGuardStatus.fabuBot.error}</p>
+                  )}
                 </div>
               )}
               

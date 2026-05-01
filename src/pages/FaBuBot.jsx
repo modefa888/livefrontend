@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Card, Button, Table, Form, Input, Select, Modal, message, Spin, Tabs, Alert, Switch, Popconfirm, Tag, Upload, Tooltip, Descriptions, Divider, InputNumber, Radio } from 'antd'
-import { RobotOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, ArrowLeftOutlined, EyeInvisibleOutlined, EyeTwoTone, CopyOutlined, UpOutlined, DownOutlined, UserOutlined, StopOutlined, CheckOutlined, SmileOutlined, PictureOutlined } from '@ant-design/icons'
+import { Card, Button, Table, Form, Input, Select, Modal, message, Spin, Tabs, Alert, Switch, Popconfirm, Tag, Upload, Tooltip, Descriptions, Divider, InputNumber, Radio, Dropdown, Menu, Badge } from 'antd'
+import { RobotOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, ArrowLeftOutlined, EyeInvisibleOutlined, EyeTwoTone, CopyOutlined, UpOutlined, DownOutlined, UserOutlined, StopOutlined, CheckOutlined, SmileOutlined, PictureOutlined, MoreOutlined, EditOutlined, ExperimentOutlined, DeleteOutlined } from '@ant-design/icons'
 import EmojiPicker from 'emoji-picker-react'
 import api from '../utils/api'
 import { useNavigate } from 'react-router-dom'
@@ -139,6 +139,23 @@ const FaBuBot = () => {
   // 启动记录相关状态
   const [startupRecords, setStartupRecords] = useState([])
   const [startupRecordsLoading, setStartupRecordsLoading] = useState(false)
+  
+  // 影视资源管理相关状态
+  const [vodSources, setVodSources] = useState([])
+  const [vodSourcesLoading, setVodSourcesLoading] = useState(false)
+  const [vodSourcesPagination, setVodSourcesPagination] = useState({ current: 1, pageSize: 20, total: 0 })
+  const [vodSourceModalVisible, setVodSourceModalVisible] = useState(false)
+  const [editingVodSource, setEditingVodSource] = useState(null)
+  const [vodSourceForm] = Form.useForm()
+  const [selectedVodSources, setSelectedVodSources] = useState([])
+  const [batchPingLoading, setBatchPingLoading] = useState(false)
+  const [batchPingResult, setBatchPingResult] = useState(null)
+  
+  // 聚合影视资源
+  const [aggregatedVodSources, setAggregatedVodSources] = useState([])
+  const [domainGroups, setDomainGroups] = useState([])
+  const [aggregatedLoading, setAggregatedLoading] = useState(false)
+  const [vodViewType, setVodViewType] = useState('aggregated') // 'aggregated' 或 'domain'
   
   // Tab懒加载相关状态
   const [activeTabKey, setActiveTabKey] = useState('status')
@@ -1178,6 +1195,180 @@ const FaBuBot = () => {
     }
   }
 
+  // 生成类似 MongoDB ObjectId 的ID (24个十六进制字符)
+  const generateObjectId = () => {
+    const timestamp = Math.floor(Date.now() / 1000).toString(16)
+    let result = timestamp
+    for (let i = 0; i < 16; i++) {
+      result += Math.floor(Math.random() * 16).toString(16)
+    }
+    return result
+  }
+
+  // 影视资源管理相关函数
+  const fetchVodSources = async (page = 1, pageSize = 20) => {
+    setVodSourcesLoading(true)
+    setBatchPingResult(null)
+    try {
+      const response = await api.get('/api/fabu-bot/vod-sources', {
+        params: { page, pageSize }
+      })
+      setVodSources(response.data.sources || [])
+      setVodSourcesPagination({
+        current: response.data.page || 1,
+        pageSize: response.data.pageSize || 20,
+        total: response.data.total || 0
+      })
+    } catch (error) {
+      message.error('获取影视资源列表失败')
+      console.error(error)
+    } finally {
+      setVodSourcesLoading(false)
+    }
+  }
+
+  // 获取聚合影视资源
+  const fetchAggregatedVodSources = async (limit = 50) => {
+    setAggregatedLoading(true)
+    try {
+      const response = await api.get('/api/fabu-bot/vod-sources/aggregated', {
+        params: { limit }
+      })
+      setAggregatedVodSources(response.data.sources || [])
+    } catch (error) {
+      message.error('获取聚合影视资源失败')
+      console.error(error)
+    } finally {
+      setAggregatedLoading(false)
+    }
+  }
+
+  // 获取按域名分组的资源
+  const fetchDomainGroups = async () => {
+    setAggregatedLoading(true)
+    try {
+      const response = await api.get('/api/fabu-bot/vod-sources/by-domain')
+      setDomainGroups(response.data.domainGroups || [])
+    } catch (error) {
+      message.error('获取按域名分组的资源失败')
+      console.error(error)
+    } finally {
+      setAggregatedLoading(false)
+    }
+  }
+
+  const showVodSourceModal = (source = null) => {
+    setEditingVodSource(source)
+    if (source) {
+      vodSourceForm.setFieldsValue({
+        id: source.id,
+        name: source.name,
+        url: source.url,
+        type: source.type || 'vod',
+        category: source.category || 'normal',
+        enabled: source.enabled !== undefined ? source.enabled : true,
+        sort: source.sort !== undefined ? source.sort : 0
+      })
+    } else {
+      vodSourceForm.resetFields()
+      vodSourceForm.setFieldsValue({
+        id: generateObjectId(),
+        type: 'vod',
+        category: 'normal',
+        enabled: true,
+        sort: 0
+      })
+    }
+    setVodSourceModalVisible(true)
+  }
+
+  const handleSaveVodSource = async (values) => {
+    try {
+      if (editingVodSource) {
+        await api.put(`/api/fabu-bot/vod-sources/${editingVodSource.id}`, values)
+        message.success('更新影视资源成功')
+      } else {
+        await api.post('/api/fabu-bot/vod-sources', values)
+        message.success('添加影视资源成功')
+      }
+      setVodSourceModalVisible(false)
+      fetchVodSources(vodSourcesPagination.current, vodSourcesPagination.pageSize)
+    } catch (error) {
+      message.error(editingVodSource ? '更新影视资源失败' : '添加影视资源失败')
+      console.error(error)
+    }
+  }
+
+  const handleDeleteVodSource = async (source) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: `确定要删除影视资源 "${source.name}" 吗？`,
+      onOk: async () => {
+        try {
+          await api.delete(`/api/fabu-bot/vod-sources/${source.id}`)
+          message.success('删除影视资源成功')
+          fetchVodSources(vodSourcesPagination.current, vodSourcesPagination.pageSize)
+        } catch (error) {
+          message.error('删除影视资源失败')
+          console.error(error)
+    }
+  }
+    })
+  }
+
+  const handlePingVodSource = async (source) => {
+    try {
+      const response = await api.post(`/api/fabu-bot/vod-sources/${source.id}/ping`)
+      if (response.data.success) {
+        message.success(`测试完成，延迟: ${response.data.ping}ms`)
+      } else {
+        message.error(`测试失败: ${response.data.message}`)
+      }
+      fetchVodSources(vodSourcesPagination.current, vodSourcesPagination.pageSize)
+    } catch (error) {
+      message.error('测试延迟失败')
+      console.error(error)
+    }
+  }
+
+  const handleBatchPing = async () => {
+    if (vodSources.length === 0) {
+      message.warning('没有可测试的影视资源')
+      return
+    }
+    setBatchPingLoading(true)
+    setBatchPingResult(null)
+    try {
+      // 设置更长的超时时间（5分钟）
+      const response = await api.post('/api/fabu-bot/vod-sources/ping/batch', {
+        ids: vodSources.map(v => v.id)
+      }, {
+        timeout: 300000
+      })
+      const successCount = response.data.results.filter(r => r.success).length
+      setBatchPingResult({
+        success: successCount,
+        total: response.data.results.length
+      })
+      message.success(`批量测试完成，成功 ${successCount}/${response.data.results.length}`)
+      fetchVodSources(vodSourcesPagination.current, vodSourcesPagination.pageSize)
+    } catch (error) {
+      // 如果是超时错误，给出更友好的提示
+      if (error.code === 'ECONNABORTED') {
+        message.warning('请求处理中，请稍后刷新列表查看结果')
+        // 3秒后自动刷新
+        setTimeout(() => {
+          fetchVodSources(vodSourcesPagination.current, vodSourcesPagination.pageSize)
+        }, 3000)
+      } else {
+        message.error('批量测试延迟失败')
+        console.error(error)
+      }
+    } finally {
+      setBatchPingLoading(false)
+    }
+  }
+
   useEffect(() => {
     return () => {
       if (autoRefreshInterval) {
@@ -1221,6 +1412,12 @@ const FaBuBot = () => {
       case 'botguard':
         await fetchBotGuardStatus()
         await fetchBotConfigs()
+        break
+      case 'vod-sources':
+        await fetchVodSources()
+        break
+      case 'vod-aggregated':
+        await fetchAggregatedVodSources()
         break
       default:
         break
@@ -2102,9 +2299,498 @@ const FaBuBot = () => {
                 </Card>
               </Spin>
             )
+          },
+          {
+            key: 'vod-sources',
+            label: '🎬 影视资源',
+            children: (
+              <Spin spinning={vodSourcesLoading}>
+                <Card 
+                  title="🎬 影视资源管理" 
+                  extra={
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <Button
+                        type="default"
+                        onClick={handleBatchPing}
+                        loading={batchPingLoading}
+                        disabled={vodSources.length === 0}
+                      >
+                        {batchPingLoading ? '测试中' : (batchPingResult ? `全部测试 (${batchPingResult.success}/${batchPingResult.total})` : '全部测试')}
+                      </Button>
+                      <Button type="primary" onClick={() => showVodSourceModal()}>
+                        添加资源
+                      </Button>
+                      <Button onClick={() => fetchVodSources(vodSourcesPagination.current, vodSourcesPagination.pageSize)} loading={vodSourcesLoading}>
+                        刷新列表
+                      </Button>
+                    </div>
+                  }
+                >
+                  <Table
+                    rowKey="id"
+                    dataSource={vodSources}
+                    pagination={{
+                      ...vodSourcesPagination,
+                      onChange: (page, pageSize) => fetchVodSources(page, pageSize)
+                    }}
+                    columns={[
+                      {
+                        title: '名称',
+                        dataIndex: 'name',
+                        key: 'name',
+                        width: 150
+                      },
+                      {
+                        title: 'URL',
+                        dataIndex: 'url',
+                        key: 'url',
+                        ellipsis: true,
+                        width: 150,
+                        render: (url) => {
+                          let domain = url
+                          try {
+                            const urlObj = new URL(url)
+                            domain = urlObj.hostname
+                          } catch (e) {
+                            // 如果URL解析失败，尝试其他方式
+                            const match = url.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:/\n]+)/i)
+                            if (match) {
+                              domain = match[1]
+                            }
+                          }
+                          return (
+                            <Tooltip title={url}>
+                              <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#1890ff' }}>
+                                {domain}
+                              </a>
+                            </Tooltip>
+                          )
+                        }
+                      },
+                      {
+                        title: '类型',
+                        dataIndex: 'type',
+                        key: 'type',
+                        width: 80,
+                        render: (type) => <Tag color="blue">{type}</Tag>
+                      },
+                      {
+                        title: '分类',
+                        dataIndex: 'category',
+                        key: 'category',
+                        width: 80,
+                        render: (category) => (
+                          <Tag color={category === 'adult' ? 'orange' : 'green'}>
+                            {category}
+                          </Tag>
+                        )
+                      },
+                      {
+                        title: '延迟',
+                        dataIndex: 'ping',
+                        key: 'ping',
+                        width: 100,
+                        render: (ping) => {
+                          if (ping === null) {
+                            return <Tag color="default">未测试</Tag>
+                          }
+                          let color = 'green'
+                          if (ping > 500) color = 'red'
+                          else if (ping > 200) color = 'orange'
+                          return <Tag color={color}>{ping}ms</Tag>
+                        }
+                      },
+                      {
+                        title: '状态',
+                        dataIndex: 'enabled',
+                        key: 'enabled',
+                        width: 80,
+                        render: (enabled) => (
+                          <Tag color={enabled ? 'green' : 'red'}>
+                            {enabled ? '启用' : '禁用'}
+                          </Tag>
+                        )
+                      },
+                      {
+                        title: '创建时间',
+                        dataIndex: 'created_at',
+                        key: 'created_at',
+                        width: 160,
+                        render: (createdAt) => createdAt ? new Date(createdAt).toLocaleString() : '-'
+                      },
+                      {
+                        title: '操作',
+                        key: 'action',
+                        width: 80,
+                        render: (_, record) => {
+                          const menuItems = [
+                            {
+                              key: 'edit',
+                              label: (
+                                <span>
+                                  <EditOutlined style={{ marginRight: 8 }} />
+                                  编辑
+                                </span>
+                              ),
+                              onClick: () => showVodSourceModal(record)
+                            },
+                            {
+                              key: 'test',
+                              label: (
+                                <span>
+                                  <ExperimentOutlined style={{ marginRight: 8 }} />
+                                  测试
+                                </span>
+                              ),
+                              onClick: () => handlePingVodSource(record)
+                            },
+                            {
+                              key: 'divider',
+                              type: 'divider'
+                            },
+                            {
+                              key: 'delete',
+                              label: (
+                                <span style={{ color: '#ff4d4f' }}>
+                                  <DeleteOutlined style={{ marginRight: 8 }} />
+                                  删除
+                                </span>
+                              ),
+                              onClick: () => {
+                                Modal.confirm({
+                                  title: '确认删除',
+                                  content: `确定要删除"${record.name}"吗？`,
+                                  onOk: () => handleDeleteVodSource(record),
+                                  okText: '确定',
+                                  cancelText: '取消'
+                                })
+                              }
+                            }
+                          ]
+                          
+                          return (
+                            <Dropdown menu={{ items: menuItems }} placement="bottomRight">
+                              <Button type="text" size="small" icon={<MoreOutlined />} />
+                            </Dropdown>
+                          )
+                        }
+                      }
+                    ]}
+                  />
+                </Card>
+              </Spin>
+            )
+          },
+          {
+            key: 'vod-aggregated',
+            label: '✨ 聚合资源',
+            children: (
+              <Spin spinning={aggregatedLoading}>
+                <Card 
+                  title="✨ 聚合资源（去重）" 
+                  extra={
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <Button 
+                        type={vodViewType === 'aggregated' ? 'primary' : 'default'}
+                        onClick={() => {
+                          setVodViewType('aggregated')
+                          if (aggregatedVodSources.length === 0) {
+                            fetchAggregatedVodSources(50)
+                          }
+                        }}
+                      >
+                        聚合视图
+                      </Button>
+                      <Button 
+                        type={vodViewType === 'domain' ? 'primary' : 'default'}
+                        onClick={() => {
+                          setVodViewType('domain')
+                          if (domainGroups.length === 0) {
+                            fetchDomainGroups()
+                          }
+                        }}
+                      >
+                        分组视图
+                      </Button>
+                    </div>
+                  }
+                >
+                  {vodViewType === 'domain' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <Alert 
+                        message="域名分组概览" 
+                        description={`共 ${domainGroups.length} 个域名，保留延迟最低的源`}
+                        type="info" 
+                        showIcon 
+                      />
+                      {domainGroups.map(group => (
+                        <Card 
+                          key={group.domain}
+                          size="small"
+                          title={
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>🌐 {group.domain}</span>
+                              <Tag color="blue">{group.sources.length} 个源</Tag>
+                            </div>
+                          }
+                          style={{ background: '#fafafa' }}
+                        >
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <Badge status="success" text="最佳源" />
+                              <strong>{group.bestSource.name}</strong>
+                              <Tag color={group.bestSource.ping && group.bestSource.ping < 200 ? 'green' : group.bestSource.ping && group.bestSource.ping < 500 ? 'orange' : 'red'}>
+                                {group.bestSource.ping ? `${group.bestSource.ping}ms` : '未测试'}
+                              </Tag>
+                              <a href={group.bestSource.url} target="_blank" rel="noopener noreferrer">
+                                访问
+                              </a>
+                            </div>
+                            {group.sources.length > 1 && (
+                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e8e8e8' }}>
+                                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>其他源：</div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                  {group.sources
+                                    .filter(s => s.id !== group.bestSource.id)
+                                    .map(s => (
+                                      <Tag key={s.id} color="default">
+                                        {s.name}
+                                        <span style={{ marginLeft: '4px', color: '#999' }}>
+                                          {s.ping ? `${s.ping}ms` : '-'}
+                                        </span>
+                                      </Tag>
+                                    ))
+                                  }
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div>
+                      <Alert 
+                        message="去重后的优质源" 
+                        description={`共 ${aggregatedVodSources.length} 个源，已按延迟排序`}
+                        type="success" 
+                        showIcon 
+                        style={{ marginBottom: '16px' }}
+                      />
+                      <Table
+                        rowKey="id"
+                        dataSource={aggregatedVodSources}
+                        pagination={false}
+                        columns={[
+                          {
+                            title: '名称',
+                            dataIndex: 'name',
+                            key: 'name',
+                            width: 150
+                          },
+                          {
+                            title: 'URL',
+                            dataIndex: 'url',
+                            key: 'url',
+                            ellipsis: true,
+                            width: 150,
+                            render: (url) => {
+                              let domain = url
+                              try {
+                                const urlObj = new URL(url)
+                                domain = urlObj.hostname
+                              } catch (e) {
+                                const match = url.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:/\n]+)/i)
+                                if (match) domain = match[1]
+                              }
+                              return (
+                                <Tooltip title={url}>
+                                  <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#1890ff' }}>
+                                    {domain}
+                                  </a>
+                                </Tooltip>
+                              )
+                            }
+                          },
+                          {
+                            title: '分类',
+                            dataIndex: 'category',
+                            key: 'category',
+                            width: 80,
+                            render: (category) => (
+                              <Tag color={category === 'adult' ? 'orange' : 'green'}>
+                                {category}
+                              </Tag>
+                            )
+                          },
+                          {
+                            title: '延迟',
+                            dataIndex: 'ping',
+                            key: 'ping',
+                            width: 100,
+                            render: (ping) => {
+                              if (ping === null) return <Tag color="default">未测试</Tag>
+                              let color = 'green'
+                              if (ping > 500) color = 'red'
+                              else if (ping > 200) color = 'orange'
+                              return <Tag color={color}>{ping}ms</Tag>
+                            }
+                          },
+                          {
+                            title: '状态',
+                            dataIndex: 'enabled',
+                            key: 'enabled',
+                            width: 80,
+                            render: (enabled) => (
+                              <Tag color={enabled ? 'green' : 'red'}>
+                                {enabled ? '启用' : '禁用'}
+                              </Tag>
+                            )
+                          }
+                        ]}
+                      />
+                    </div>
+                  )}
+                </Card>
+              </Spin>
+            )
           }
         ]}
       />
+      
+      {/* 影视资源编辑 Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '20px' }}>🎬</span>
+            <span style={{ fontWeight: 600 }}>{editingVodSource ? '编辑影视资源' : '添加影视资源'}</span>
+          </div>
+        }
+        open={vodSourceModalVisible}
+        onCancel={() => setVodSourceModalVisible(false)}
+        footer={null}
+        width={700}
+        style={{ top: '8vh' }}
+      >
+        <Form
+          form={vodSourceForm}
+          layout="vertical"
+          onFinish={handleSaveVodSource}
+        >
+          <Card size="small" style={{ marginBottom: '16px', background: '#fafafa' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <span style={{ fontSize: '14px' }}>📝</span>
+              <span style={{ fontWeight: 500, color: '#1890ff' }}>基本信息</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <Form.Item
+                name="id"
+                label="ID"
+                rules={[{ required: true, message: '请输入ID' }]}
+                style={{ marginBottom: '8px' }}
+              >
+                <Input
+                  placeholder="请输入资源ID"
+                  disabled={!!editingVodSource}
+                  addonAfter={
+                    !editingVodSource ? (
+                      <Button
+                        type="text"
+                        icon={<ReloadOutlined />}
+                        size="small"
+                        onClick={() => {
+                          const newId = generateObjectId()
+                          vodSourceForm.setFieldValue('id', newId)
+                        }}
+                        title="刷新生成新ID"
+                      />
+                    ) : null
+                  }
+                />
+              </Form.Item>
+              <Form.Item
+                name="name"
+                label="名称"
+                rules={[{ required: true, message: '请输入名称' }]}
+                style={{ marginBottom: '8px' }}
+              >
+                <Input placeholder="请输入资源名称" />
+              </Form.Item>
+            </div>
+            <Form.Item
+              name="url"
+              label="URL"
+              rules={[
+                { required: true, message: '请输入URL' },
+                { type: 'url', message: '请输入有效的URL' }
+              ]}
+              style={{ marginBottom: '8px' }}
+            >
+              <Input placeholder="请输入资源URL" />
+            </Form.Item>
+          </Card>
+
+          <Card size="small" style={{ marginBottom: '16px', background: '#fafafa' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <span style={{ fontSize: '14px' }}>⚙️</span>
+              <span style={{ fontWeight: 500, color: '#1890ff' }}>配置信息</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <Form.Item
+                name="type"
+                label="类型"
+                initialValue="vod"
+                style={{ marginBottom: '8px' }}
+              >
+                <Select>
+                  <Option value="vod">vod</Option>
+                  <Option value="api">api</Option>
+                  <Option value="other">other</Option>
+                </Select>
+              </Form.Item>
+              <Form.Item
+                name="category"
+                label="分类"
+                initialValue="normal"
+                style={{ marginBottom: '8px' }}
+              >
+                <Select>
+                  <Option value="normal">normal</Option>
+                  <Option value="adult">adult</Option>
+                  <Option value="other">other</Option>
+                </Select>
+              </Form.Item>
+              <Form.Item
+                name="enabled"
+                label="状态"
+                valuePropName="checked"
+                initialValue={true}
+                style={{ marginBottom: '8px' }}
+              >
+                <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+              </Form.Item>
+              <Form.Item
+                name="sort"
+                label="排序"
+                initialValue={0}
+                style={{ marginBottom: '8px' }}
+              >
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </div>
+          </Card>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #f0f0f0' }}>
+            <Button onClick={() => setVodSourceModalVisible(false)} size="large">
+              取消
+            </Button>
+            <Button type="primary" htmlType="submit" size="large">
+              <span style={{ marginRight: '6px' }}>💾</span>
+              保存
+            </Button>
+          </div>
+        </Form>
+      </Modal>
       
       {/* 配置编辑 Modal */}
       <Modal
