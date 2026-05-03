@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Tabs, Table, Select, Spin, message, Input, Switch, Button, Badge, Tag } from 'antd'
-import { SearchOutlined, PauseCircleOutlined, PlayCircleOutlined, DeleteOutlined } from '@ant-design/icons'
+import { Card, Tabs, Table, Select, Spin, message, Input, Switch, Button, Badge, Tag, Tooltip, Modal, Descriptions } from 'antd'
+import { SearchOutlined, PauseCircleOutlined, PlayCircleOutlined, DeleteOutlined, ClockCircleOutlined, VideoCameraOutlined, SendOutlined, ThunderboltOutlined, FileTextOutlined, UpOutlined, DownOutlined } from '@ant-design/icons'
 import api from '../utils/api'
 
 const { Option } = Select
-const { TabPane } = Tabs
 
 function Logs() {
   const [liveHistory, setLiveHistory] = useState([])
@@ -16,8 +15,14 @@ function Logs() {
   const [matches, setMatches] = useState([])
   const [currentMatchIndex, setCurrentMatchIndex] = useState(-1)
   const [logType, setLogType] = useState('backend')
+  const [botType, setBotType] = useState('livebot')
   const logContentRef = React.useRef(null)
   const searchInputRef = React.useRef(null)
+  
+  // 查看详情模态框状态
+  const [viewModalVisible, setViewModalVisible] = useState(false)
+  const [viewModalTitle, setViewModalTitle] = useState('')
+  const [viewModalData, setViewModalData] = useState(null)
   
   // 实时日志相关状态
   const [realtimeLogs, setRealtimeLogs] = useState([])
@@ -46,7 +51,7 @@ function Logs() {
 
   useEffect(() => {
     fetchLogFiles()
-  }, [logType])
+  }, [logType, botType])
 
   const fetchLiveHistory = async () => {
     setLoading(prev => ({ ...prev, liveHistory: true }))
@@ -75,7 +80,11 @@ function Logs() {
   const fetchLogFiles = async () => {
     setLoading(prev => ({ ...prev, logFiles: true }))
     try {
-      const response = await api.get(`/api/logs/files?type=${logType}`)
+      let url = `/api/logs/files?type=${logType}`
+      if (logType === 'bot') {
+        url += `&bot=${botType}`
+      }
+      const response = await api.get(url)
       setLogFiles(response.data)
     } catch (error) {
       message.error('获取日志文件列表失败')
@@ -87,7 +96,11 @@ function Logs() {
   const fetchLogContent = async (filename) => {
     setLoading(prev => ({ ...prev, logContent: true }))
     try {
-      const response = await api.get(`/api/logs/files/${filename}?type=${logType}`)
+      let url = `/api/logs/files/${filename}?type=${logType}`
+      if (logType === 'bot') {
+        url += `&bot=${botType}`
+      }
+      const response = await api.get(url)
       setLogContent(response.data.content)
     } catch (error) {
       message.error('获取日志文件内容失败')
@@ -139,7 +152,7 @@ function Logs() {
     if (currentMatchIndex === -1 || !logContentRef.current) return
 
     setTimeout(() => {
-      const highlightedElements = logContentRef.current.querySelectorAll('span[style*="background-color: orange"]')
+      const highlightedElements = logContentRef.current.querySelectorAll('span[style*="background-color: #faad14"]')
       if (highlightedElements.length > 0) {
         highlightedElements[0].scrollIntoView({
           behavior: 'smooth',
@@ -240,14 +253,13 @@ function Logs() {
                   if (!isRealtimePaused) {
                     setRealtimeLogs(prev => {
                       const newLogs = [...prev, data];
-                      return newLogs.slice(-200); // 只保留最新的200条
+                      return newLogs.slice(-200);
                     });
                     setNewLogCount(prev => prev + 1);
                   } else {
                     setNewLogCount(prev => prev + 1);
                   }
                 } catch (e) {
-                  // 忽略解析失败的行
                 }
               }
             }
@@ -259,7 +271,6 @@ function Logs() {
         }
       };
       
-      // 保存reader引用
       eventSourceRef.current = { close: () => reader.cancel() };
       
       readStream();
@@ -301,53 +312,72 @@ function Logs() {
     if (content.toLowerCase().includes('info') || content.includes('ℹ️')) {
       return '#1890ff';
     }
-    return '#000';
+    return '#d4d4d4';
   };
 
   const liveHistoryColumns = [
     {
       title: 'ID',
       dataIndex: 'id',
-      key: 'id'
+      key: 'id',
+      width: 80
     },
     {
       title: '主播',
       dataIndex: 'username',
-      key: 'username'
+      key: 'username',
+      width: 120,
+      render: (username) => (
+        <Tag color="blue">{username}</Tag>
+      )
     },
     {
       title: '标题',
       dataIndex: 'title',
       key: 'title',
-      ellipsis: true
-    },
-    {
-      title: '日期',
-      dataIndex: 'day',
-      key: 'day'
+      ellipsis: true,
+      render: (text, record) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text}</span>
+          <Button 
+            type="link" 
+            size="small" 
+            icon={<SearchOutlined />}
+            style={{ padding: '0 4px', minWidth: 'auto', flexShrink: 0 }}
+            onClick={() => {
+              setViewModalTitle('直播历史详情')
+              setViewModalData(record)
+              setViewModalVisible(true)
+            }}
+          />
+        </div>
+      )
     },
     {
       title: '开始时间',
       dataIndex: 'startLive',
       key: 'startLive',
+      width: 180,
       render: (timestamp) => {
         if (!timestamp) return '-';
-        return new Date(parseInt(timestamp)).toLocaleString();
+        return <Tag color="green">{new Date(parseInt(timestamp)).toLocaleString()}</Tag>;
       }
     },
     {
       title: '结束时间',
       dataIndex: 'endLive',
       key: 'endLive',
+      width: 180,
       render: (timestamp) => {
         if (!timestamp) return '-';
-        return new Date(parseInt(timestamp)).toLocaleString();
+        return <Tag color="red">{new Date(parseInt(timestamp)).toLocaleString()}</Tag>;
       }
     },
     {
       title: '更新时间',
       dataIndex: 'updatedAt',
       key: 'updatedAt',
+      width: 180,
       render: (time) => formatDate(time)
     }
   ]
@@ -356,272 +386,471 @@ function Logs() {
     {
       title: 'ID',
       dataIndex: 'id',
-      key: 'id'
+      key: 'id',
+      width: 80
     },
     {
       title: '内容',
       dataIndex: 'content',
-      key: 'content'
+      key: 'content',
+      ellipsis: true,
+      render: (text, record) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text}</span>
+          <Button 
+            type="link" 
+            size="small" 
+            icon={<SearchOutlined />}
+            style={{ padding: '0 4px', minWidth: 'auto', flexShrink: 0 }}
+            onClick={() => {
+              setViewModalTitle('发送记录详情')
+              setViewModalData(record)
+              setViewModalVisible(true)
+            }}
+          />
+        </div>
+      )
     },
     {
       title: '类型',
       dataIndex: 'type',
-      key: 'type'
+      key: 'type',
+      width: 100,
+      render: (type) => {
+        const typeMap = {
+          'text': <Tag color="blue">文本</Tag>,
+          'image': <Tag color="green">图片</Tag>,
+          'video': <Tag color="purple">视频</Tag>,
+          'document': <Tag color="orange">文档</Tag>
+        }
+        return typeMap[type] || <Tag>{type}</Tag>
+      }
     },
     {
       title: '目标',
       dataIndex: 'target',
-      key: 'target'
+      key: 'target',
+      width: 150
     },
     {
       title: '时间',
       dataIndex: 'timestamp',
       key: 'timestamp',
-      render: (time) => formatDate(time)
+      width: 180,
+      render: (time) => <Tag color="cyan">{formatDate(time)}</Tag>
     }
   ]
 
-  return (
-    <div>
-      <div style={{ marginBottom: 16 }}>
-        <h2>监控日志</h2>
-      </div>
-      
-      <Tabs defaultActiveKey="live-history">
-        <TabPane tab="直播历史" key="live-history">
+  const tabItems = [
+    {
+      key: 'live-history',
+      label: <span><VideoCameraOutlined style={{ marginRight: 8 }} />直播历史</span>,
+      children: (
+        <Card>
           {loading.liveHistory ? (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
               <Spin size="large" />
             </div>
           ) : (
-            <Table columns={liveHistoryColumns} dataSource={liveHistory} rowKey="id" />
+            <Table 
+              columns={liveHistoryColumns} 
+              dataSource={liveHistory} 
+              rowKey="id"
+              pagination={{
+                pageSize: 20,
+                showSizeChanger: true,
+                showQuickJumper: true,
+                showTotal: (total) => `共 ${total} 条记录`
+              }}
+            />
           )}
-        </TabPane>
-        
-        <TabPane tab="发送记录" key="sends">
+        </Card>
+      )
+    },
+    {
+      key: 'sends',
+      label: <span><SendOutlined style={{ marginRight: 8 }} />发送记录</span>,
+      children: (
+        <Card>
           {loading.sends ? (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
               <Spin size="large" />
             </div>
           ) : (
-            <Table columns={sendsColumns} dataSource={sends} rowKey="id" />
+            <Table 
+              columns={sendsColumns} 
+              dataSource={sends} 
+              rowKey="id"
+              pagination={{
+                pageSize: 20,
+                showSizeChanger: true,
+                showQuickJumper: true,
+                showTotal: (total) => `共 ${total} 条记录`
+              }}
+            />
           )}
-        </TabPane>
-        
-        <TabPane tab={
-          <span>
-            实时日志
-            {newLogCount > 0 && <Badge count={newLogCount} style={{ marginLeft: 8 }} />}
-          </span>
-        } key="realtime-logs">
-          <Card>
-            <div style={{ marginBottom: 16, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-              {/* 连接状态 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Badge 
-                  status={isRealtimeConnected ? 'success' : 'default'} 
-                  text={isRealtimeConnected ? '已连接' : '已断开'} 
-                />
-              </div>
-              
-              {/* 连接/断开按钮 */}
-              {!isRealtimeConnected ? (
-                <Button 
-                  type="primary" 
-                  icon={<PlayCircleOutlined />} 
-                  onClick={connectRealtimeLogs}
-                >
-                  连接
-                </Button>
-              ) : (
-                <Button 
-                  danger
-                  icon={<PauseCircleOutlined />} 
-                  onClick={disconnectRealtimeLogs}
-                >
-                  断开
-                </Button>
-              )}
-              
-              {/* 暂停/恢复按钮 */}
-              {isRealtimeConnected && (
-                <Button 
-                  onClick={() => setIsRealtimePaused(!isRealtimePaused)}
-                  icon={isRealtimePaused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
-                >
-                  {isRealtimePaused ? '继续' : '暂停'}
-                </Button>
-              )}
-              
-              {/* 清除按钮 */}
-              <Button 
-                icon={<DeleteOutlined />} 
-                onClick={clearRealtimeLogs}
-                disabled={realtimeLogs.length === 0}
-              >
-                清除
-              </Button>
-              
-              {/* 日志类型筛选 */}
-              <Select
-                style={{ width: 150 }}
-                value={realtimeLogType}
-                onChange={setRealtimeLogType}
-                options={[
-                  { value: 'all', label: '全部日志' },
-                  { value: 'backend', label: '后端日志' },
-                  { value: 'bot', label: '机器人日志' }
-                ]}
+        </Card>
+      )
+    },
+    {
+      key: 'realtime-logs',
+      label: <span><ThunderboltOutlined style={{ marginRight: 8 }} />实时日志{newLogCount > 0 && <Badge count={newLogCount} style={{ marginLeft: 8 }} />}</span>,
+      children: (
+        <Card>
+          <div style={{ marginBottom: 16, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Badge 
+                status={isRealtimeConnected ? 'success' : 'default'} 
+                text={isRealtimeConnected ? '已连接' : '已断开'} 
               />
-              
-              {/* 显示时间戳切换 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>时间戳</span>
-                <Switch 
-                  checked={showTimestamps} 
-                  onChange={setShowTimestamps}
-                />
-              </div>
             </div>
             
-            {/* 日志显示区域 */}
+            {!isRealtimeConnected ? (
+              <Button 
+                type="primary" 
+                icon={<PlayCircleOutlined />} 
+                onClick={connectRealtimeLogs}
+              >
+                连接
+              </Button>
+            ) : (
+              <Button 
+                danger
+                icon={<PauseCircleOutlined />} 
+                onClick={disconnectRealtimeLogs}
+              >
+                断开
+              </Button>
+            )}
+            
+            {isRealtimeConnected && (
+              <Button 
+                onClick={() => setIsRealtimePaused(!isRealtimePaused)}
+                icon={isRealtimePaused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
+              >
+                {isRealtimePaused ? '继续' : '暂停'}
+              </Button>
+            )}
+            
+            <Button 
+              icon={<DeleteOutlined />} 
+              onClick={clearRealtimeLogs}
+              disabled={realtimeLogs.length === 0}
+            >
+              清除
+            </Button>
+            
+            <Select
+              style={{ width: 150 }}
+              value={realtimeLogType}
+              onChange={setRealtimeLogType}
+              options={[
+                { value: 'all', label: '全部日志' },
+                { value: 'backend', label: '后端日志' },
+                { value: 'bot', label: '机器人日志' }
+              ]}
+            />
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span><ClockCircleOutlined style={{ marginRight: 4 }} />时间戳</span>
+              <Switch 
+                checked={showTimestamps} 
+                onChange={setShowTimestamps}
+              />
+            </div>
+          </div>
+          
+          <div 
+            ref={realtimeLogRef}
+            style={{ 
+              height: '60vh', 
+              overflow: 'auto', 
+              backgroundColor: '#1e1e1e', 
+              color: '#d4d4d4',
+              padding: 16, 
+              borderRadius: 8,
+              fontFamily: 'Consolas, Monaco, Courier New, monospace',
+              fontSize: 13,
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15) inset'
+            }}
+          >
+            {!isRealtimeConnected && realtimeLogs.length === 0 ? (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#888', flexDirection: 'column' }}>
+                <ThunderboltOutlined style={{ fontSize: 48, marginBottom: 16, opacity: 0.5 }} />
+                <div>点击「连接」开始接收实时日志</div>
+              </div>
+            ) : (
+              realtimeLogs
+                .filter(log => {
+                  if (realtimeLogType === 'all') return true;
+                  return log.type === realtimeLogType;
+                })
+                .map((log, index) => (
+                  <div key={index} style={{ marginBottom: 6, lineHeight: 1.8, borderBottom: '1px solid #333', paddingBottom: 6 }}>
+                    <span style={{ display: 'inline-flex', gap: 12, alignItems: 'flex-start' }}>
+                      {showTimestamps && (
+                        <span style={{ color: '#6a9955', fontSize: 12, minWidth: 80 }}>
+                          [{new Date(log.timestamp).toLocaleTimeString()}]
+                        </span>
+                      )}
+                      <Tag 
+                        color={log.type === 'backend' ? 'blue' : 'purple'} 
+                        style={{ marginRight: 8, fontSize: 11 }}
+                      >
+                        {log.type === 'backend' ? '后端' : '机器人'}
+                      </Tag>
+                      <span style={{ color: getLogColor(log.content), wordBreak: 'break-all' }}>
+                        {log.content}
+                      </span>
+                    </span>
+                  </div>
+                ))
+            )}
+          </div>
+        </Card>
+      )
+    },
+    {
+      key: 'log-files',
+      label: <span><FileTextOutlined style={{ marginRight: 8 }} />日志文件</span>,
+      children: (
+        <Card>
+          <div style={{ marginBottom: 16, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Select
+              placeholder="选择日志类型"
+              style={{ width: 150 }}
+              value={logType}
+              onChange={(value) => {
+                setLogType(value)
+                setSelectedLogFile('')
+                setLogContent('')
+              }}
+              options={[
+                { value: 'backend', label: '后端日志' },
+                { value: 'bot', label: '机器人日志' }
+              ]}
+            />
+            {logType === 'bot' && (
+              <Select
+                placeholder="选择机器人"
+                style={{ width: 150 }}
+                value={botType}
+                onChange={(value) => {
+                  setBotType(value)
+                  setSelectedLogFile('')
+                  setLogContent('')
+                }}
+                options={[
+                  { value: 'livebot', label: 'LiveBot' },
+                  { value: 'fabuBot', label: 'FaBuBot' }
+                ]}
+              />
+            )}
+            <Select
+              placeholder="选择日志文件"
+              style={{ width: 300 }}
+              value={selectedLogFile}
+              onChange={handleLogFileChange}
+              options={logFiles.map(file => ({
+                value: file,
+                label: file
+              }))}
+            />
+            <Input
+              ref={searchInputRef}
+              placeholder="搜索关键字"
+              prefix={<SearchOutlined />}
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
+              style={{ width: 300 }}
+              onPressEnter={navigateToNextMatch}
+            />
+            {matches.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Tag color="blue">{currentMatchIndex + 1}/{matches.length}</Tag>
+                <Tooltip title="上一个">
+                  <Button 
+                    type="text" 
+                    icon={<UpOutlined />} 
+                    onClick={navigateToPrevMatch}
+                  />
+                </Tooltip>
+                <Tooltip title="下一个">
+                  <Button 
+                    type="text" 
+                    icon={<DownOutlined />} 
+                    onClick={navigateToNextMatch}
+                  />
+                </Tooltip>
+              </div>
+            )}
+          </div>
+          
+          {loading.logContent ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+              <Spin size="large" />
+            </div>
+          ) : (
             <div 
-              ref={realtimeLogRef}
+              ref={logContentRef} 
               style={{ 
                 height: '60vh', 
                 overflow: 'auto', 
                 backgroundColor: '#1e1e1e', 
                 color: '#d4d4d4',
                 padding: 16, 
-                borderRadius: 4,
+                borderRadius: 8,
                 fontFamily: 'Consolas, Monaco, Courier New, monospace',
-                fontSize: 13
+                fontSize: 13,
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15) inset'
               }}
             >
-              {!isRealtimeConnected && realtimeLogs.length === 0 ? (
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#888' }}>
-                  点击「连接」开始接收实时日志
-                </div>
-              ) : (
-                realtimeLogs
-                  .filter(log => {
-                    if (realtimeLogType === 'all') return true;
-                    return log.type === realtimeLogType;
-                  })
-                  .map((log, index) => (
-                    <div key={index} style={{ marginBottom: 4, lineHeight: 1.6 }}>
-                      <span style={{ display: 'inline-flex', gap: 8 }}>
-                        {showTimestamps && (
-                          <span style={{ color: '#6a9955', fontSize: 12 }}>
-                            [{new Date(log.timestamp).toLocaleTimeString()}]
-                          </span>
-                        )}
-                        <Tag 
-                          color={log.type === 'backend' ? 'blue' : 'purple'} 
-                          style={{ marginRight: 8, fontSize: 11 }}
-                        >
-                          {log.type === 'backend' ? '后端' : '机器人'}
-                        </Tag>
-                        <span style={{ color: getLogColor(log.content) }}>
-                          {log.content}
-                        </span>
-                      </span>
-                    </div>
-                  ))
-              )}
-            </div>
-          </Card>
-        </TabPane>
-        
-        <TabPane tab="日志文件" key="log-files">
-          <Card className="card">
-            <div style={{ marginBottom: 16, display: 'flex', gap: 16, alignItems: 'center' }}>
-              <Select
-                placeholder="选择日志类型"
-                style={{ width: 150 }}
-                value={logType}
-                onChange={(value) => {
-                  setLogType(value)
-                  setSelectedLogFile('')
-                  setLogContent('')
-                }}
-                options={[
-                  { value: 'backend', label: '后端日志' },
-                  { value: 'bot', label: '机器人日志' }
-                ]}
-              />
-              <Select
-                placeholder="选择日志文件"
-                style={{ width: 300 }}
-                value={selectedLogFile}
-                onChange={handleLogFileChange}
-                options={logFiles.map(file => ({
-                  value: file,
-                  label: file
-                }))}
-              />
-              <Input
-                ref={searchInputRef}
-                placeholder="搜索关键字"
-                prefix={<SearchOutlined />}
-                value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
-                style={{ width: 300 }}
-                onPressEnter={navigateToNextMatch}
-              />
-              {matches.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>{currentMatchIndex + 1}/{matches.length}</span>
-                  <button
-                    onClick={navigateToPrevMatch}
-                    style={{ padding: '4px 8px', cursor: 'pointer', border: '1px solid #d9d9d9', borderRadius: '4px' }}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    onClick={navigateToNextMatch}
-                    style={{ padding: '4px 8px', cursor: 'pointer', border: '1px solid #d9d9d9', borderRadius: '4px' }}
-                  >
-                    ↓
-                  </button>
-                </div>
-              )}
-            </div>
-            
-            {loading.logContent ? (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-                <Spin size="large" />
-              </div>
-            ) : (
-              <div ref={logContentRef} style={{ height: '60vh', overflow: 'auto', backgroundColor: '#f5f5f5', padding: 16, borderRadius: 4 }}>
-                {logContent ? (
-                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-                    {searchKeyword ? (
-                      <span dangerouslySetInnerHTML={{
-                        __html: logContent.split(new RegExp(`(${searchKeyword})`, 'gi')).map((part, index) => {
-                          if (index % 2 === 1) {
-                            const matchIndex = Math.floor(index / 2)
-                            if (matchIndex === currentMatchIndex) {
-                              return `<span style="background-color: orange; font-weight: bold;">${part}</span>`
-                            } else {
-                              return `<span style="background-color: yellow;">${part}</span>`
-                            }
+              {logContent ? (
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
+                  {searchKeyword ? (
+                    <span dangerouslySetInnerHTML={{
+                      __html: logContent.split(new RegExp(`(${searchKeyword})`, 'gi')).map((part, index) => {
+                        if (index % 2 === 1) {
+                          const matchIndex = Math.floor(index / 2)
+                          if (matchIndex === currentMatchIndex) {
+                            return `<span style="background-color: #faad14; color: #000; font-weight: bold; padding: 0 4px; border-radius: 2px;">${part}</span>`
+                          } else {
+                            return `<span style="background-color: #ffec3d; color: #000; padding: 0 4px; border-radius: 2px;">${part}</span>`
                           }
-                          return part
-                        }).join('')
-                      }} />
-                    ) : (
-                      logContent
-                    )}
-                  </pre>
-                ) : (
-                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>请选择一个日志文件</pre>
-                )}
-              </div>
-            )}
-          </Card>
-        </TabPane>
-      </Tabs>
+                        }
+                        return part
+                      }).join('')
+                    }} />
+                  ) : (
+                    logContent
+                  )}
+                </pre>
+              ) : (
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: '#888', display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column' }}>
+                  <FileTextOutlined style={{ fontSize: 48, marginBottom: 16, opacity: 0.5 }} />
+                  <div>请选择一个日志文件</div>
+                </pre>
+              )}
+            </div>
+          )}
+        </Card>
+      )
+    }
+  ]
+
+  return (
+    <div style={{ padding: 16 }}>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ margin: 0, color: '#1890ff', fontSize: 24, fontWeight: 600 }}>📊 监控日志</h2>
+      </div>
+      
+      <Tabs 
+        defaultActiveKey="live-history" 
+        items={tabItems}
+        type="card"
+      />
+
+      {/* 查看详情模态框 */}
+      <Modal
+        title={viewModalTitle}
+        open={viewModalVisible}
+        onCancel={() => setViewModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setViewModalVisible(false)}>
+            关闭
+          </Button>
+        ]}
+        width={800}
+      >
+        <div style={{ maxHeight: '60vh', overflow: 'auto' }}>
+          {viewModalData && (
+            <Descriptions bordered column={1} size="small">
+              {Object.entries(viewModalData).map(([key, value]) => {
+                if (value === null || value === undefined) return null;
+                
+                let displayValue = value;
+                let displayKey = key;
+                
+                // 格式化字段名
+                const keyMap = {
+                  id: 'ID',
+                  mid: '主播ID',
+                  day: '日期',
+                  username: '主播名',
+                  title: '标题',
+                  startLive: '开始时间',
+                  endLive: '结束时间',
+                  updatedAt: '更新时间',
+                  targetUrl: '直播链接',
+                  pic: '封面图',
+                  content: '内容',
+                  type: '类型',
+                  target: '目标',
+                  timestamp: '时间'
+                };
+                
+                displayKey = keyMap[key] || key;
+                
+                // 格式化时间戳
+                if ((key === 'startLive' || key === 'endLive') && value && !isNaN(value)) {
+                  displayValue = new Date(parseInt(value)).toLocaleString('zh-CN');
+                }
+                if ((key === 'updatedAt' || key === 'timestamp') && value) {
+                  displayValue = new Date(value).toLocaleString('zh-CN');
+                }
+                
+                // 获取类型标签
+                const getTypeTag = (typeValue) => {
+                  if (!typeValue) return '-';
+                  switch(typeValue) {
+                    case 'text': return <Tag color="blue">文本</Tag>;
+                    case 'photo': return <Tag color="green">图片</Tag>;
+                    case 'video': return <Tag color="purple">视频</Tag>;
+                    case 'document': return <Tag color="orange">文档</Tag>;
+                    default: return <Tag>{typeValue}</Tag>;
+                  }
+                };
+                
+                return (
+                  <Descriptions.Item key={key} label={displayKey}>
+                  {key === 'pic' && value ? (
+                    <img 
+                      src={value} 
+                      alt="封面" 
+                      style={{ 
+                        maxWidth: '100%', 
+                        maxHeight: 200, 
+                        borderRadius: 4,
+                        border: '1px solid #d9d9d9'
+                      }} 
+                    />
+                  ) : key === 'targetUrl' && value ? (
+                    <a 
+                      href={value} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ 
+                        color: '#1890ff', 
+                        wordBreak: 'break-all',
+                        textDecoration: 'none'
+                      }}
+                    >
+                      {value}
+                    </a>
+                  ) : key === 'type' ? (
+                    getTypeTag(value)
+                  ) : (
+                    <span style={{ wordBreak: 'break-all' }}>
+                      {String(displayValue) || '-'}
+                    </span>
+                  )}
+                </Descriptions.Item>
+                );
+              })}
+            </Descriptions>
+          )}
+        </div>
+      </Modal>
     </div>
   )
 }

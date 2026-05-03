@@ -28,6 +28,7 @@ const Tools = () => {
   const [isPulling, setIsPulling] = useState(false)
   const [isRenamingBranch, setIsRenamingBranch] = useState(false)
   const [isResettingGit, setIsResettingGit] = useState(false)
+  const [gitBlockedBySecret, setGitBlockedBySecret] = useState(false)
   
   // 系统状态相关状态
   const [systemStatus, setSystemStatus] = useState(null)
@@ -36,6 +37,11 @@ const Tools = () => {
   // 备份记录相关状态
   const [backupRecords, setBackupRecords] = useState([])
   const [backupLoading, setBackupLoading] = useState(false)
+  
+  // 本地文件检查相关状态
+  const [missingRecords, setMissingRecords] = useState([])
+  const [checkingFiles, setCheckingFiles] = useState(false)
+  const [isMissingModalVisible, setIsMissingModalVisible] = useState(false)
   
   // 备份按钮加载状态
   const [backupButtonLoading, setBackupButtonLoading] = useState(false)
@@ -209,6 +215,42 @@ const Tools = () => {
       setCodeBackupRecords(response.data)
     } catch (error) {
       message.error('获取代码备份记录失败')
+      console.error(error)
+    }
+  }
+  
+  // 检查本地文件是否存在
+  const checkBackupFiles = async () => {
+    setCheckingFiles(true)
+    try {
+      const response = await api.get('/api/tools/system/backup-records/check-files')
+      setMissingRecords(response.data.missingRecords)
+      if (response.data.missingCount > 0) {
+        setIsMissingModalVisible(true)
+      } else {
+        message.success('所有备份记录对应的本地文件都存在')
+      }
+    } catch (error) {
+      message.error('检查备份文件失败')
+      console.error(error)
+    } finally {
+      setCheckingFiles(false)
+    }
+  }
+  
+  // 批量删除缺失文件的记录
+  const deleteMissingRecords = async () => {
+    try {
+      const ids = missingRecords.map(record => record.id)
+      await api.delete('/api/tools/system/backup-records/batch-delete', {
+        data: { ids }
+      })
+      message.success(`成功删除 ${ids.length} 条无效记录`)
+      setIsMissingModalVisible(false)
+      setMissingRecords([])
+      fetchBackupRecords()
+    } catch (error) {
+      message.error('删除记录失败')
       console.error(error)
     }
   }
@@ -593,6 +635,107 @@ const Tools = () => {
     }
   }
 
+  // 根据文件扩展名获取图标
+  const getFileIcon = (fileName) => {
+    const ext = fileName.split('.').pop().toLowerCase()
+    
+    const imageExts = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'ico']
+    const jsExts = ['js', 'jsx']
+    const tsExts = ['ts', 'tsx']
+    const htmlExts = ['html', 'htm']
+    const cssExts = ['css', 'scss', 'less', 'sass']
+    const jsonExts = ['json']
+    const configExts = ['env', 'config', 'yml', 'yaml', 'toml']
+    const mdExts = ['md', 'markdown']
+    const sqlExts = ['sql']
+    const pyExts = ['py']
+    const shExts = ['sh', 'bash']
+    const dockerExts = ['dockerfile']
+    const lockExts = ['lock']
+    
+    if (imageExts.includes(ext)) return '🖼️'
+    if (jsExts.includes(ext)) return '📜'
+    if (tsExts.includes(ext)) return '🔷'
+    if (htmlExts.includes(ext)) return '🌐'
+    if (cssExts.includes(ext)) return '🎨'
+    if (jsonExts.includes(ext)) return '📋'
+    if (configExts.includes(ext)) return '⚙️'
+    if (mdExts.includes(ext)) return '📝'
+    if (sqlExts.includes(ext)) return '🗄️'
+    if (pyExts.includes(ext)) return '🐍'
+    if (shExts.includes(ext)) return '🐚'
+    if (dockerExts.includes(ext)) return '🐳'
+    if (lockExts.includes(ext)) return '🔒'
+    
+    return '📄'
+  }
+
+  // 解析git status为树状结构
+  const parseGitStatusToTree = (status) => {
+    const lines = status.trim().split('\n')
+    const tree = {}
+    
+    lines.forEach(line => {
+      if (!line.trim()) return
+      const match = line.match(/^\s*([MAD])\s+(.+)$/)
+      if (match) {
+        const fileStatus = match[1]
+        let path = match[2]
+        
+        path = path.replace(/^"|"$/g, '')
+        
+        const parts = path.split('/')
+        let current = tree
+        
+        parts.forEach((part, index) => {
+          part = part.replace(/^"|"$/g, '')
+          
+          if (!current[part]) {
+            current[part] = {
+              type: index === parts.length - 1 ? 'file' : 'folder',
+              status: index === parts.length - 1 ? fileStatus : null,
+              children: {}
+            }
+          }
+          current = current[part].children
+        })
+      }
+    })
+    
+    const buildTreeData = (obj, parentPath = '') => {
+      return Object.keys(obj).map(key => {
+        const item = obj[key]
+        const isFile = item.type === 'file'
+        const path = parentPath ? `${parentPath}/${key}` : key
+        const fileIcon = isFile ? getFileIcon(key) : '📁'
+        
+        return {
+          title: (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>{fileIcon}</span>
+              <span>{key}</span>
+              {item.status && (
+                <span style={{ 
+                  fontSize: '11px', 
+                  padding: '2px 6px', 
+                  borderRadius: '4px',
+                  backgroundColor: item.status === 'M' ? '#fff7e6' : item.status === 'A' ? '#f6ffed' : '#fff2f0',
+                  color: item.status === 'M' ? '#d46b08' : item.status === 'A' ? '#52c41a' : '#ff4d4f'
+                }}>
+                  {item.status === 'M' ? '修改' : item.status === 'A' ? '新增' : '删除'}
+                </span>
+              )}
+            </div>
+          ),
+          key: path,
+          children: Object.keys(item.children).length > 0 ? buildTreeData(item.children, path) : undefined
+        }
+      })
+    }
+    
+    return buildTreeData(tree)
+  }
+
   // 版本控制相关函数
   const initGitRepo = async () => {
     setIsInitializing(true)
@@ -602,7 +745,11 @@ const Tools = () => {
       fetchGitStatus()
       fetchGitLog()
     } catch (error) {
-      message.error('初始化 Git 仓库失败')
+      if (error.response?.data?.message === 'Git 仓库已初始化') {
+        message.warning('Git 仓库已初始化')
+      } else {
+        message.error('初始化 Git 仓库失败')
+      }
       console.error(error)
     } finally {
       setIsInitializing(false)
@@ -714,8 +861,15 @@ const Tools = () => {
       })
       message.success(response.data.message)
       fetchGitStatus()
+      setGitBlockedBySecret(false)
     } catch (error) {
-      message.error('推送失败')
+      const errorMessage = error.response?.data?.message || '推送失败'
+      if (errorMessage.includes('secret') || errorMessage.includes('Secret scanning') || errorMessage.includes('秘密检测')) {
+        setGitBlockedBySecret(true)
+        message.error('推送被 GitHub 秘密检测阻止')
+      } else {
+        message.error(errorMessage)
+      }
       console.error(error)
     } finally {
       setIsPushing(false)
@@ -775,6 +929,7 @@ const Tools = () => {
           message.success(response.data.message)
           fetchGitStatus()
           fetchGitLog()
+          setGitBlockedBySecret(false)
         } catch (error) {
           message.error('重置Git仓库失败')
           console.error(error)
@@ -844,7 +999,7 @@ const Tools = () => {
       <h1 style={{ marginBottom: '20px' }}>工具管理</h1>
       
       <Tabs defaultActiveKey="tasks">
-        <TabPane tab="定时任务" key="tasks">
+        <TabPane tab="⏰ 定时任务" key="tasks">
           <div style={{ marginBottom: '20px' }}>
             <Button type="primary" onClick={showAddModal} style={{ marginRight: '10px' }}>
               添加定时任务
@@ -864,7 +1019,7 @@ const Tools = () => {
           </Spin>
         </TabPane>
 
-        <TabPane tab="系统管理" key="system">
+        <TabPane tab="⚙️ 系统管理" key="system">
           <Spin spinning={systemLoading}>
             <Card title="系统状态">
               {systemStatus && (
@@ -960,7 +1115,7 @@ const Tools = () => {
           </Spin>
         </TabPane>
         
-        <TabPane tab="备份代码" key="backup-code">
+        <TabPane tab="💾 备份代码" key="backup-code">
           <Card 
             title={
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1334,7 +1489,23 @@ const Tools = () => {
             </Tabs>
             
             <div style={{ marginTop: '20px' }}>
-              <Card title="备份记录" extra={<Button type="link" onClick={fetchBackupRecords} loading={backupLoading}>刷新</Button>}>
+              <Card 
+                title="📋 备份记录" 
+                extra={
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <Button 
+                      type="link" 
+                      onClick={checkBackupFiles} 
+                      loading={checkingFiles}
+                    >
+                      🔍 检查本地文件
+                    </Button>
+                    <Button type="link" onClick={fetchBackupRecords} loading={backupLoading}>
+                      🔄 刷新
+                    </Button>
+                  </div>
+                }
+              >
                 <Spin spinning={backupLoading}>
                   <Table 
                     columns={[
@@ -1392,180 +1563,283 @@ const Tools = () => {
           </Card>
         </TabPane>
         
-        <TabPane tab="版本控制" key="version-control">
-          <Card title="版本控制">
-            <div style={{ marginBottom: '20px' }}>
-              <Select 
-                value={gitType} 
-                onChange={setGitType}
-                style={{ width: 200, marginRight: '10px' }}
-              >
-                <Option value="backend">后端</Option>
-                <Option value="frontend">前端</Option>
-              </Select>
+        <TabPane tab="📦 版本控制" key="version-control">
+          <Card title="🛠️ 版本控制" style={{ borderRadius: '12px' }}>
+            <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '15px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '16px' }}>📁</span>
+                <Select 
+                  value={gitType} 
+                  onChange={setGitType}
+                  style={{ width: 160 }}
+                >
+                  <Option value="backend">🖥️ 后端</Option>
+                  <Option value="frontend">🌐 前端</Option>
+                </Select>
+              </div>
               
               {!gitStatus?.isInitialized && (
                 <Button 
                   type="primary" 
                   onClick={initGitRepo}
                   loading={isInitializing}
+                  style={{ borderRadius: '8px' }}
                 >
-                  初始化 Git 仓库
+                  🚀 初始化 Git 仓库
                 </Button>
               )}
             </div>
             
             {gitStatus?.isInitialized && (
               <>
-                <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
-                  <h4>Git 状态</h4>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                    <p><strong>当前分支:</strong> {gitStatus.branch}</p>
+                <Card 
+                  title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>📊</span>
+                      <span>Git 状态</span>
+                    </div>
+                  }
+                  style={{ marginBottom: '16px', borderRadius: '10px' }}
+                >
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '14px' }}>🌿</span>
+                      <span style={{ fontWeight: '500' }}>当前分支:</span>
+                      <span style={{ color: '#1890ff', fontWeight: '600' }}>{gitStatus.branch}</span>
+                    </div>
+                    
                     {gitStatus.branch === 'master' && (
                       <Button 
                         type="primary" 
                         size="small"
                         onClick={handleRenameBranch}
                         loading={isRenamingBranch}
+                        style={{ borderRadius: '6px' }}
                       >
-                        重命名为main
+                        🔄 重命名为 main
                       </Button>
                     )}
                   </div>
-                  <p><strong>最近提交:</strong> {gitStatus.lastCommit}</p>
+                  
+                  <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '14px' }}>📝</span>
+                    <span style={{ fontWeight: '500' }}>最近提交:</span>
+                    <span style={{ fontFamily: 'monospace', fontSize: '13px', color: '#666' }}>{gitStatus.lastCommit}</span>
+                  </div>
                   
                   {gitStatus.status && (
-                    <div style={{ marginTop: '10px' }}>
-                      <strong>更改的文件:</strong>
-                      <pre style={{ 
+                    <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#fafafa', borderRadius: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '14px' }}>📁</span>
+                        <span style={{ fontWeight: '500' }}>更改的文件</span>
+                      </div>
+                      <div style={{ 
                         backgroundColor: '#fff', 
-                        padding: '10px', 
-                        borderRadius: '4px',
-                        marginTop: '5px',
-                        maxHeight: '200px',
+                        padding: '8px', 
+                        borderRadius: '6px',
+                        maxHeight: '250px',
                         overflow: 'auto'
                       }}>
-                        {gitStatus.status || '(无更改)'}
-                      </pre>
+                        <Tree 
+                          defaultExpandAll 
+                          treeData={parseGitStatusToTree(gitStatus.status)}
+                          style={{ fontSize: '13px' }}
+                        />
+                      </div>
                     </div>
                   )}
-                </div>
+                </Card>
                 
-                <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f0f7ff', borderRadius: '4px' }}>
-                  <h4>远程仓库</h4>
-                  <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                    <Input 
-                      placeholder="输入远程仓库地址 (例如: https://github.com/username/repo.git)"
-                      value={remoteUrl}
-                      onChange={(e) => setRemoteUrl(e.target.value)}
-                      style={{ flex: 1 }}
-                    />
+                <Card 
+                  title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>☁️</span>
+                      <span>远程仓库</span>
+                    </div>
+                  }
+                  style={{ marginBottom: '16px', borderRadius: '10px' }}
+                >
+                  <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+                    <div style={{ flex: 1, display: 'flex', gap: '8px' }}>
+                      <span style={{ fontSize: '14px', marginTop: '8px' }}>🔗</span>
+                      <Input 
+                        placeholder="输入远程仓库地址..."
+                        value={remoteUrl}
+                        onChange={(e) => setRemoteUrl(e.target.value)}
+                        style={{ borderRadius: '8px' }}
+                      />
+                    </div>
                     <Button 
                       type="primary" 
                       onClick={handleSetRemote}
                       loading={isSettingRemote}
+                      style={{ borderRadius: '8px' }}
                     >
-                      设置
+                      ⚙️ 设置
                     </Button>
                   </div>
+                  
                   {remoteUrl && (
-                    <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
                       <Button 
                         type="primary" 
                         onClick={handlePush}
                         loading={isPushing}
+                        style={{ borderRadius: '8px' }}
                       >
-                        推送到远程
+                        📤 推送到远程
                       </Button>
                       <Button 
                         onClick={handlePull}
                         loading={isPulling}
+                        style={{ borderRadius: '8px' }}
                       >
-                        从远程拉取
+                        📥 从远程拉取
                       </Button>
                     </div>
                   )}
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <Button 
-                      danger
-                      onClick={handleResetGit}
-                      loading={isResettingGit}
-                    >
-                      重置Git仓库（清除历史）
-                    </Button>
-                  </div>
-                  <p style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
-                    提示：如果推送被GitHub的秘密检测阻止，请使用"重置Git仓库"功能清除历史记录后重新提交。
-                  </p>
-                </div>
+                  
+                  {gitBlockedBySecret && (
+                    <>
+                      <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+                        <Button 
+                          danger
+                          onClick={handleResetGit}
+                          loading={isResettingGit}
+                          style={{ borderRadius: '8px' }}
+                        >
+                          🗑️ 重置 Git 仓库
+                        </Button>
+                      </div>
+                      
+                      <div style={{ marginTop: '12px', padding: '10px', backgroundColor: '#fff7e6', borderRadius: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '14px' }}>💡</span>
+                          <span style={{ fontSize: '13px', color: '#d46b08' }}>
+                            如果推送被 GitHub 的秘密检测阻止，请使用"重置 Git 仓库"功能清除历史记录后重新提交。
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </Card>
                 
-                <div style={{ marginBottom: '20px' }}>
-                  <h4>提交更改</h4>
-                  <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                    <Input 
-                      placeholder="输入提交信息..."
-                      value={commitMessage}
-                      onChange={(e) => setCommitMessage(e.target.value)}
-                      style={{ flex: 1 }}
-                    />
+                <Card 
+                  title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>💬</span>
+                      <span>提交更改</span>
+                    </div>
+                  }
+                  style={{ marginBottom: '16px', borderRadius: '10px' }}
+                >
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{ flex: 1, display: 'flex', gap: '8px' }}>
+                      <span style={{ fontSize: '14px', marginTop: '8px' }}>✏️</span>
+                      <Input 
+                        placeholder="输入提交信息..."
+                        value={commitMessage}
+                        onChange={(e) => setCommitMessage(e.target.value)}
+                        style={{ borderRadius: '8px' }}
+                      />
+                    </div>
                     <Button 
                       type="primary" 
                       onClick={handleCommit}
                       loading={isCommitting}
+                      style={{ borderRadius: '8px' }}
                     >
-                      提交
+                      📌 提交
                     </Button>
-                    <Button onClick={fetchGitStatus}>刷新状态</Button>
+                    <Button onClick={fetchGitStatus} style={{ borderRadius: '8px' }}>
+                      🔄 刷新
+                    </Button>
                   </div>
-                </div>
+                </Card>
                 
-                <div>
-                  <h4>提交历史</h4>
+                <Card 
+                  title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>📜</span>
+                      <span>提交历史</span>
+                    </div>
+                  }
+                  style={{ borderRadius: '10px' }}
+                >
                   <Table 
                     dataSource={gitCommits}
                     rowKey="hash"
                     pagination={{ pageSize: 10 }}
+                    style={{ borderRadius: '8px' }}
                     columns={[
                       {
-                        title: '提交哈希',
+                        title: (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>🔑</span>
+                            <span>提交哈希</span>
+                          </div>
+                        ),
                         dataIndex: 'hash',
                         key: 'hash',
-                        width: 100
+                        width: 100,
+                        render: (text) => (
+                          <code style={{ fontSize: '12px', color: '#1890ff' }}>{text}</code>
+                        )
                       },
                       {
-                        title: '提交信息',
+                        title: (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>📝</span>
+                            <span>提交信息</span>
+                          </div>
+                        ),
                         dataIndex: 'message',
                         key: 'message'
                       },
                       {
-                        title: '作者',
+                        title: (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>👤</span>
+                            <span>作者</span>
+                          </div>
+                        ),
                         dataIndex: 'author',
                         key: 'author',
-                        width: 150
+                        width: 120
                       },
                       {
-                        title: '时间',
+                        title: (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>🕐</span>
+                            <span>时间</span>
+                          </div>
+                        ),
                         dataIndex: 'time',
                         key: 'time',
-                        width: 150
+                        width: 140
                       },
                       {
-                        title: '操作',
+                        title: (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>⚡</span>
+                            <span>操作</span>
+                          </div>
+                        ),
                         key: 'action',
-                        width: 100,
+                        width: 80,
                         render: (_, record) => (
                           <Button 
                             type="link" 
                             size="small"
                             onClick={() => handleCheckout(record.hash)}
                           >
-                            检出
+                            🔄 检出
                           </Button>
                         )
                       }
                     ]}
                   />
-                </div>
+                </Card>
               </>
             )}
           </Card>
@@ -1573,75 +1847,201 @@ const Tools = () => {
       </Tabs>
 
       <Modal
-        title={editingTask ? '编辑定时任务' : '添加定时任务'}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>{editingTask ? '✏️' : '➕'}</span>
+            <span>{editingTask ? '编辑定时任务' : '添加定时任务'}</span>
+          </div>
+        }
         open={isModalVisible}
         onCancel={() => setIsModalVisible(false)}
         onOk={() => form.submit()}
+        width={450}
+        style={{ borderRadius: '12px' }}
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={editingTask ? handleUpdateTask : handleAddTask}
-        >
-          <Form.Item
-            name="name"
-            label="任务名称"
-            rules={[{ required: true, message: '请输入任务名称' }]}
+        <div style={{ padding: '10px 0' }}>
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={editingTask ? handleUpdateTask : handleAddTask}
           >
-            <Input placeholder="请输入任务名称" />
-          </Form.Item>
-          <Form.Item
-            name="type"
-            label="任务类型"
-            rules={[{ required: true, message: '请选择任务类型' }]}
-          >
-            <Select placeholder="请选择任务类型">
-              <Option value="backup">数据库备份</Option>
-              <Option value="cleanup">日志清理</Option>
-              <Option value="notification">通知任务</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item
-            name="cronExpression"
-            label="Cron表达式"
-            rules={[{ required: true, message: '请输入Cron表达式' }]}
-          >
-            <Input placeholder="请输入Cron表达式，例如: 0 0 * * *" />
-          </Form.Item>
-          <Form.Item
-            name="isEnabled"
-            label="状态"
-            initialValue={true}
-          >
-            <Select>
-              <Option value={true}>启用</Option>
-              <Option value={false}>禁用</Option>
-            </Select>
-          </Form.Item>
-        </Form>
+            <Form.Item
+              name="name"
+              label={
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>📝</span>
+                  <span>任务名称</span>
+                </span>
+              }
+              rules={[{ required: true, message: '请输入任务名称' }]}
+            >
+              <Input 
+                placeholder="请输入任务名称，如：每日数据库备份" 
+                style={{ borderRadius: '8px' }}
+              />
+            </Form.Item>
+            <Form.Item
+              name="type"
+              label={
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>🎯</span>
+                  <span>任务类型</span>
+                </span>
+              }
+              rules={[{ required: true, message: '请选择任务类型' }]}
+            >
+              <Select 
+                placeholder="请选择任务类型" 
+                style={{ borderRadius: '8px' }}
+              >
+                <Option value="backup">🗄️ 数据库备份</Option>
+                <Option value="cleanup">🧹 日志清理</Option>
+                <Option value="notification">🔔 通知任务</Option>
+              </Select>
+            </Form.Item>
+            <Form.Item
+              name="cronExpression"
+              label={
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>⏱️</span>
+                  <span>Cron表达式</span>
+                </span>
+              }
+              rules={[{ required: true, message: '请输入Cron表达式' }]}
+            >
+              <Input 
+                placeholder="例如: 0 0 * * *（每天凌晨执行）" 
+                style={{ borderRadius: '8px' }}
+              />
+              <p style={{ fontSize: '12px', color: '#999', marginTop: '8px' }}>
+                💡 提示：Cron表达式格式为 秒 分 时 日 月 周
+              </p>
+            </Form.Item>
+            <Form.Item
+              name="isEnabled"
+              label={
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>🔌</span>
+                  <span>状态</span>
+                </span>
+              }
+              initialValue={true}
+            >
+              <Select style={{ borderRadius: '8px' }}>
+                <Option value={true}>✅ 启用</Option>
+                <Option value={false}>❌ 禁用</Option>
+              </Select>
+            </Form.Item>
+          </Form>
+        </div>
+      </Modal>
+
+      {/* 缺失文件提示模态框 */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>⚠️</span>
+            <span>发现缺失的备份文件</span>
+          </div>
+        }
+        open={isMissingModalVisible}
+        onCancel={() => setIsMissingModalVisible(false)}
+        footer={null}
+        width={600}
+        style={{ borderRadius: '12px' }}
+      >
+        <div style={{ padding: '10px 0' }}>
+          <p style={{ fontSize: '14px', color: '#d93026', marginBottom: '16px' }}>
+            检测到 {missingRecords.length} 条备份记录在本地不存在对应的文件，是否删除这些无效记录？
+          </p>
+          
+          <div style={{ 
+            border: '1px solid #ffe4e6', 
+            borderRadius: '8px', 
+            padding: '12px',
+            maxHeight: '300px',
+            overflow: 'auto',
+            backgroundColor: '#fff7f7'
+          }}>
+            <h4 style={{ marginBottom: '10px', color: '#d93026' }}>📝 缺失文件列表</h4>
+            <ul style={{ listStyle: 'none', padding: 0 }}>
+              {missingRecords.map((record, index) => (
+                <li 
+                  key={record.id} 
+                  style={{ 
+                    padding: '8px', 
+                    borderBottom: '1px dashed #ffccc7',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}
+                >
+                  <span style={{ color: '#ff4d4f' }}>❌</span>
+                  <span style={{ flex: 1 }}>{record.backupFileName}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          
+          <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <Button onClick={() => setIsMissingModalVisible(false)}>
+              取消
+            </Button>
+            <Button 
+              type="primary" 
+              danger
+              onClick={deleteMissingRecords}
+            >
+              🗑️ 删除这些记录
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* 密码验证模态框 */}
       <Modal
-        title="请输入密码进行验证"
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>🔐</span>
+            <span>安全验证</span>
+          </div>
+        }
         open={isPasswordModalVisible}
         onCancel={() => setIsPasswordModalVisible(false)}
         onOk={() => passwordForm.submit()}
         confirmLoading={passwordLoading}
+        width={400}
+        style={{ borderRadius: '12px' }}
       >
-        <Form
-          form={passwordForm}
-          layout="vertical"
-          onFinish={handlePasswordVerify}
-        >
-          <Form.Item
-            name="password"
-            label="密码"
-            rules={[{ required: true, message: '请输入密码' }]}
+        <div style={{ padding: '10px 0' }}>
+          <p style={{ fontSize: '14px', color: '#666', marginBottom: '16px', textAlign: 'center' }}>
+            此操作需要验证身份，请输入密码
+          </p>
+          <Form
+            form={passwordForm}
+            layout="vertical"
+            onFinish={handlePasswordVerify}
           >
-            <Input.Password placeholder="请输入密码" />
-          </Form.Item>
-        </Form>
+            <Form.Item
+              name="password"
+              label={
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>🔑</span>
+                  <span>密码</span>
+                </span>
+              }
+              rules={[{ required: true, message: '请输入密码' }]}
+            >
+              <Input.Password 
+                placeholder="请输入管理员密码" 
+                style={{ borderRadius: '8px' }}
+              />
+            </Form.Item>
+          </Form>
+          <p style={{ fontSize: '12px', color: '#999', marginTop: '12px', textAlign: 'center' }}>
+            ⚠️ 请确保在安全环境下输入密码
+          </p>
+        </div>
       </Modal>
 
 

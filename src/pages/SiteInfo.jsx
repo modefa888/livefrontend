@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Button, Table, Form, Input, Modal, message, Spin, Image, Space, Pagination } from 'antd'
-import { UnorderedListOutlined, PlayCircleOutlined, EyeOutlined, CheckCircleOutlined, VideoCameraOutlined } from '@ant-design/icons'
+import { Card, Button, Table, Form, Input, Modal, message, Spin, Image, Space, Pagination, Tooltip } from 'antd'
+import { UnorderedListOutlined, PlayCircleOutlined, EyeOutlined, CheckCircleOutlined, VideoCameraOutlined, CopyOutlined } from '@ant-design/icons'
 import api from '../utils/api'
 
 const SiteInfo = () => {
@@ -18,6 +18,18 @@ const SiteInfo = () => {
   const [isViewModalVisible, setIsViewModalVisible] = useState(false)
   const [viewRecord, setViewRecord] = useState(null)
   const [searchKeyword, setSearchKeyword] = useState('')
+  
+
+  const scriptUrl = 'http://localhost:3002/api/scripts/智能存档助手.user.js'
+
+  const copyScriptUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(scriptUrl)
+      message.success('脚本地址已复制到剪贴板')
+    } catch (error) {
+      message.error('复制失败，请手动复制')
+    }
+  }
 
   const fetchSiteInfoData = async (page = 1, size = 10) => {
     setSiteInfoLoading(true)
@@ -124,22 +136,13 @@ const SiteInfo = () => {
               />
             </div>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <Space>
-                <Button 
-                  type={viewMode === 'list' ? 'primary' : 'default'}
-                  icon={<UnorderedListOutlined />}
-                  onClick={() => setViewMode('list')}
+              <Button 
+                  type="default"
+                  icon={viewMode === 'list' ? <VideoCameraOutlined /> : <UnorderedListOutlined />}
+                  onClick={() => setViewMode(viewMode === 'list' ? 'card' : 'list')}
                 >
-                  列表视图
+                  {viewMode === 'list' ? '卡片视图' : '列表视图'}
                 </Button>
-                <Button 
-                  type={viewMode === 'card' ? 'primary' : 'default'}
-                  icon={<VideoCameraOutlined />}
-                  onClick={() => setViewMode('card')}
-                >
-                  卡片视图
-                </Button>
-              </Space>
               <Button 
                 type="primary" 
                 onClick={() => {
@@ -147,8 +150,16 @@ const SiteInfo = () => {
                   setIsSiteInfoModalVisible(true)
                 }}
               >
-                添加数据
+                +
               </Button>
+              <Tooltip title="复制脚本地址">
+              <Button 
+                icon={<CopyOutlined />}
+                onClick={copyScriptUrl}
+              >
+                脚本
+              </Button>
+            </Tooltip>
             </div>
           </div>
         }
@@ -274,36 +285,22 @@ const SiteInfo = () => {
                     style={{ borderRadius: '12px', overflow: 'hidden' }}
                     onClick={() => item.page_href && window.open(item.page_href, '_blank')}
                   >
-                    <div style={{ marginBottom: '12px', backgroundColor: '#f5f5f5', height: '180px', overflow: 'hidden', cursor: 'zoom-in' }} onClick={(e) => e.stopPropagation()}>
+                    <div style={{ marginBottom: '12px', backgroundColor: '#f5f5f5', height: '180px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
                       <Image 
                         src={item.page_img} 
                         alt={item.page_title}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center center' }}
-                        preview
+                        width="100%"
+                        height="100%"
+                        preview={{
+                          mask: '点击放大'
+                        }}
+                        style={{ objectFit: 'contain' }}
                         onError={(e) => {
                           if (item.local_img_path) {
                             e.target.src = item.local_img_path;
                           }
                         }}
-                      >
-                        {({ image }) => {
-                          if (!image) {
-                            return (
-                              <div style={{ 
-                                width: '100%', 
-                                height: '100%', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                justifyContent: 'center',
-                                backgroundColor: '#e5e5e5'
-                              }}>
-                                <span style={{ color: '#999', fontSize: '14px' }}>图片失联了</span>
-                              </div>
-                            )
-                          }
-                          return null
-                        }}
-                      </Image>
+                      />
                     </div>
                     <h3 style={{ 
                       fontSize: '14px', 

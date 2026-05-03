@@ -31,6 +31,8 @@ import Pages from './pages/Pages'
 import PageView from './pages/PageView'
 import SiteInfo from './pages/SiteInfo'
 import ParseRecords from './pages/ParseRecords'
+import VodSources from './pages/VodSources'
+import VodAggregated from './pages/VodAggregated'
 
 
 
@@ -204,6 +206,26 @@ function App() {
       label: '爬虫接口',
       path: '/spider-api',
       modulePath: '/spider-api'
+    },
+    {
+      key: 'vod',
+      icon: <ApiOutlined />,
+      label: '🎬 影视资源',
+      modulePath: '/vod-sources',
+      children: [
+        {
+          key: 'vod-sources',
+          label: '🎬 影视资源',
+          path: '/vod-sources',
+          modulePath: '/vod-sources'
+        },
+        {
+          key: 'vod-aggregated',
+          label: '✨ 聚合资源',
+          path: '/vod-aggregated',
+          modulePath: '/vod-aggregated'
+        }
+      ]
     },
     {
       key: 'tools',
@@ -682,6 +704,8 @@ const NavigationMenu = ({ menuItems, isLoading }) => {
                     <Route path="/monitor-stats" element={<MonitorStats />} />
                     <Route path="/spider" element={<Spider />} />
                     <Route path="/spider-api" element={<SpiderAPI />} />
+                    <Route path="/vod-sources" element={<VodSources />} />
+                    <Route path="/vod-aggregated" element={<VodAggregated />} />
                     <Route path="/tools" element={<Tools />} />
                     <Route path="/bot" element={<BotSelect />} />
                     <Route path="/bot/livebot" element={<Bot />} />

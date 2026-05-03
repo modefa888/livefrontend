@@ -2944,7 +2944,7 @@ const Bot = () => {
 {/* 删除确认模态框 */}
       <Modal
         title="确认删除"
-        visible={deleteModalVisible}
+        open={deleteModalVisible}
         onOk={confirmDelete}
         onCancel={cancelDelete}
         okText="确认删除"
