@@ -210,7 +210,6 @@ const Tools = () => {
       
       await api.post('/api/tools/tasks/start-all', {})
       message.success('所有定时任务已启动')
-      fetchTasks()
     } catch (error) {
       message.error('启动定时任务失败')
       console.error(error)
@@ -223,7 +222,6 @@ const Tools = () => {
       
       await api.post('/api/tools/tasks/stop-all', {})
       message.success('所有定时任务已停止')
-      fetchTasks()
     } catch (error) {
       message.error('停止定时任务失败')
       console.error(error)
@@ -1187,43 +1185,7 @@ const Tools = () => {
       title: '状态',
       dataIndex: 'isEnabled',
       key: 'isEnabled',
-      render: (isEnabled) => (
-        <span 
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '4px 12px',
-            borderRadius: '20px',
-            fontWeight: '500',
-            fontSize: '13px',
-            animation: isEnabled ? 'status-blink-green 2s ease-in-out infinite' : 'status-blink-gray 3s ease-in-out infinite'
-          }}
-        >
-          <span style={{ fontSize: '14px' }}>{isEnabled ? '✅' : '❌'}</span>
-          <span style={{ color: isEnabled ? '#52c41a' : '#999' }}>{isEnabled ? '运行中' : '已停止'}</span>
-          <style>{`
-            @keyframes status-blink-green {
-              0%, 100% { 
-                background-color: rgba(82, 196, 26, 0.1);
-                box-shadow: 0 0 0 0 rgba(82, 196, 26, 0.4);
-              }
-              50% { 
-                background-color: rgba(82, 196, 26, 0.15);
-                box-shadow: 0 0 0 4px rgba(82, 196, 26, 0);
-              }
-            }
-            @keyframes status-blink-gray {
-              0%, 100% { 
-                background-color: rgba(153, 153, 153, 0.1);
-              }
-              50% { 
-                background-color: rgba(153, 153, 153, 0.05);
-              }
-            }
-          `}</style>
-        </span>
-      )
+      render: (isEnabled) => (isEnabled ? '启用' : '禁用')
     },
     {
       title: '操作',
@@ -1247,62 +1209,72 @@ const Tools = () => {
       
       <Tabs defaultActiveKey="tasks">
         <TabPane tab="⏰ 定时任务" key="tasks">
+          <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+            <Button 
+              onClick={stopAllTasks} 
+              style={{ 
+                padding: '10px 24px', 
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontWeight: '500',
+                border: '2px solid #ff4d4f',
+                color: '#ff4d4f',
+                transition: 'all 0.3s',
+                hover: {
+                  backgroundColor: '#fff2f0',
+                  borderColor: '#ff7875'
+                }
+              }}
+            >
+              ⏹️ 停止所有任务
+            </Button>
+            <Button 
+              onClick={startAllTasks} 
+              style={{ 
+                padding: '10px 24px', 
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontWeight: '500',
+                border: '2px solid #52c41a',
+                color: '#52c41a',
+                transition: 'all 0.3s',
+                hover: {
+                  backgroundColor: '#f6ffed',
+                  borderColor: '#73d13d'
+                }
+              }}
+            >
+              ▶️ 启动所有任务
+            </Button>
+            <Button 
+              type="primary" 
+              onClick={showAddModal} 
+              style={{ 
+                padding: '10px 24px', 
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontWeight: '500',
+                background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
+                border: 'none',
+                boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
+                transition: 'all 0.3s',
+                hover: {
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 6px 16px rgba(24, 144, 255, 0.4)'
+                }
+              }}
+            >
+              ➕ 添加定时任务
+            </Button>
+          </div>
+
           <Spin spinning={loading}>
             <Card 
               title="定时任务列表"
-              extra={
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <Button 
-                    onClick={stopAllTasks} 
-                    style={{ 
-                      padding: '8px 20px', 
-                      borderRadius: '8px',
-                      fontSize: '13px',
-                      fontWeight: '500',
-                      border: '2px solid #ff4d4f',
-                      color: '#ff4d4f',
-                      transition: 'all 0.3s'
-                    }}
-                  >
-                    ⏹️ 停止所有
-                  </Button>
-                  <Button 
-                    onClick={startAllTasks} 
-                    style={{ 
-                      padding: '8px 20px', 
-                      borderRadius: '8px',
-                      fontSize: '13px',
-                      fontWeight: '500',
-                      border: '2px solid #52c41a',
-                      color: '#52c41a',
-                      transition: 'all 0.3s'
-                    }}
-                  >
-                    ▶️ 启动所有
-                  </Button>
-                  <Button 
-                    type="primary" 
-                    onClick={showAddModal} 
-                    style={{ 
-                      padding: '8px 20px', 
-                      borderRadius: '8px',
-                      fontSize: '13px',
-                      fontWeight: '500',
-                      background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
-                      border: 'none',
-                      boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
-                      transition: 'all 0.3s'
-                    }}
-                  >
-                    ➕ 添加任务
-                  </Button>
-                </div>
-              }
               style={{ 
                 borderRadius: '12px', 
                 boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
-                overflow: 'hidden',
-                marginBottom: '20px'
+                overflow: 'hidden'
               }}
             >
               <Table 

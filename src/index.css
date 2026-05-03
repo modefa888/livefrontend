@@ -126,3 +126,15 @@ code {
 .ant-card:hover .video-card-play-icon {
   opacity: 1 !important;
 }
+
+/* Cron表达式生成器输入框样式 */
+.cron-input-number .ant-input-number-input-wrap {
+  height: 100% !important;
+}
+
+.cron-input-number .ant-input-number-input {
+  height: 100% !important;
+  padding: 0 !important;
+  text-align: center;
+  font-size: 14px;
+}
