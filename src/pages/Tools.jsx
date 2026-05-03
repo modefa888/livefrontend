@@ -29,6 +29,13 @@ const Tools = () => {
   const [isRenamingBranch, setIsRenamingBranch] = useState(false)
   const [isResettingGit, setIsResettingGit] = useState(false)
   const [gitBlockedBySecret, setGitBlockedBySecret] = useState(false)
+  const [branches, setBranches] = useState([])
+  const [isFetchingBranches, setIsFetchingBranches] = useState(false)
+  const [defaultBranch, setDefaultBranch] = useState('')
+  const [isRenameModalVisible, setIsRenameModalVisible] = useState(false)
+  const [branchToRename, setBranchToRename] = useState('')
+  const [newBranchName, setNewBranchName] = useState('')
+  const [isBranchModalVisible, setIsBranchModalVisible] = useState(false)
   
   // 系统状态相关状态
   const [systemStatus, setSystemStatus] = useState(null)
@@ -792,6 +799,19 @@ const Tools = () => {
       setCommitMessage('')
       fetchGitStatus()
       fetchGitLog()
+      
+      if (remoteUrl) {
+        Modal.confirm({
+          title: '提交成功',
+          content: '是否立即推送到远程仓库？',
+          okText: '推送',
+          okType: 'primary',
+          cancelText: '稍后推送',
+          onOk: () => {
+            handlePush()
+          }
+        })
+      }
     } catch (error) {
       message.error('提交失败')
       console.error(error)
@@ -852,6 +872,106 @@ const Tools = () => {
     }
   }
 
+  // 获取分支列表
+  const fetchBranches = async () => {
+    setIsFetchingBranches(true)
+    try {
+      const response = await api.get(`/api/tools/system/git/branches?type=${gitType}`)
+      setBranches(response.data.branches)
+      setDefaultBranch(response.data.defaultBranch)
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setIsFetchingBranches(false)
+    }
+  }
+
+  // 删除远程分支
+  const handleDeleteBranch = async (branchName) => {
+    if (branchName === defaultBranch) {
+      message.warning('不能删除默认分支')
+      return
+    }
+    
+    Modal.confirm({
+      title: '确认删除分支',
+      content: `确定要删除远程分支 "${branchName}" 吗？此操作不可撤销！`,
+      okText: '确认删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          const response = await api.post('/api/tools/system/git/delete-branch', {
+            type: gitType,
+            branchName: branchName
+          })
+          message.success(response.data.message)
+          fetchBranches()
+        } catch (error) {
+          message.error('删除分支失败')
+          console.error(error)
+        }
+      }
+    })
+  }
+
+  // 打开重命名模态框
+  const openRenameModal = (branchName) => {
+    setBranchToRename(branchName)
+    setNewBranchName(branchName)
+    setIsRenameModalVisible(true)
+  }
+
+  // 重命名分支
+  const handleRenameBranch = async () => {
+    if (!newBranchName.trim()) {
+      message.warning('请输入新分支名称')
+      return
+    }
+    
+    try {
+      const response = await api.post('/api/tools/system/git/rename-branch', {
+        type: gitType,
+        oldName: branchToRename,
+        newName: newBranchName.trim()
+      })
+      message.success(response.data.message)
+      setIsRenameModalVisible(false)
+      setBranchToRename('')
+      setNewBranchName('')
+      fetchBranches()
+      fetchGitStatus()
+    } catch (error) {
+      message.error('重命名分支失败')
+      console.error(error)
+    }
+  }
+
+  // 切换当前分支
+  const handleCheckoutBranch = async (branchName) => {
+    Modal.confirm({
+      title: '确认切换分支',
+      content: `确定要切换到分支 "${branchName}" 吗？`,
+      okText: '确认切换',
+      okType: 'primary',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          const response = await api.post('/api/tools/system/git/checkout-branch', {
+            type: gitType,
+            branchName: branchName
+          })
+          message.success(response.data.message)
+          fetchGitStatus()
+          fetchBranches()
+        } catch (error) {
+          message.error('切换分支失败')
+          console.error(error)
+        }
+      }
+    })
+  }
+
   // 推送到远程仓库
   const handlePush = async () => {
     setIsPushing(true)
@@ -890,24 +1010,6 @@ const Tools = () => {
       console.error(error)
     } finally {
       setIsPulling(false)
-    }
-  }
-
-  // 重命名分支为main
-  const handleRenameBranch = async () => {
-    setIsRenamingBranch(true)
-    try {
-      const response = await api.post('/api/tools/system/git/rename-branch', {
-        type: gitType,
-        newName: 'main'
-      })
-      message.success(response.data.message)
-      fetchGitStatus()
-    } catch (error) {
-      message.error('重命名分支失败')
-      console.error(error)
-    } finally {
-      setIsRenamingBranch(false)
     }
   }
 
@@ -1605,14 +1707,31 @@ const Tools = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ fontSize: '14px' }}>🌿</span>
                       <span style={{ fontWeight: '500' }}>当前分支:</span>
-                      <span style={{ color: '#1890ff', fontWeight: '600' }}>{gitStatus.branch}</span>
+                      <span 
+                        style={{ 
+                          color: '#1890ff', 
+                          fontWeight: '600', 
+                          cursor: 'pointer',
+                          textDecoration: 'underline'
+                        }}
+                        onClick={() => {
+                          fetchBranches()
+                          setIsBranchModalVisible(true)
+                        }}
+                      >
+                        {gitStatus.branch}
+                      </span>
                     </div>
                     
                     {gitStatus.branch === 'master' && (
                       <Button 
                         type="primary" 
                         size="small"
-                        onClick={handleRenameBranch}
+                        onClick={() => {
+                          setBranchToRename(gitStatus.branch)
+                          setNewBranchName('main')
+                          handleRenameBranch()
+                        }}
                         loading={isRenamingBranch}
                         style={{ borderRadius: '6px' }}
                       >
@@ -1722,6 +1841,8 @@ const Tools = () => {
                       </div>
                     </>
                   )}
+                  
+                  
                 </Card>
                 
                 <Card 
@@ -1998,6 +2119,41 @@ const Tools = () => {
         </div>
       </Modal>
 
+      {/* 重命名分支模态框 */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>✏️</span>
+            <span>修改分支名称</span>
+          </div>
+        }
+        open={isRenameModalVisible}
+        onCancel={() => {
+          setIsRenameModalVisible(false)
+          setBranchToRename('')
+          setNewBranchName('')
+        }}
+        onOk={handleRenameBranch}
+        width={400}
+        style={{ borderRadius: '12px' }}
+      >
+        <div style={{ padding: '10px 0' }}>
+          <p style={{ fontSize: '14px', color: '#666', marginBottom: '16px' }}>
+            将分支 <strong style={{ color: '#1890ff' }}>{branchToRename}</strong> 重命名为：
+          </p>
+          <Input 
+            value={newBranchName}
+            onChange={(e) => setNewBranchName(e.target.value)}
+            placeholder="输入新分支名称"
+            style={{ borderRadius: '8px' }}
+            autoFocus
+          />
+          <p style={{ fontSize: '12px', color: '#999', marginTop: '12px' }}>
+            💡 分支名称只能包含字母、数字和连字符，不能以连字符开头
+          </p>
+        </div>
+      </Modal>
+
       {/* 密码验证模态框 */}
       <Modal
         title={
@@ -2041,6 +2197,105 @@ const Tools = () => {
           <p style={{ fontSize: '12px', color: '#999', marginTop: '12px', textAlign: 'center' }}>
             ⚠️ 请确保在安全环境下输入密码
           </p>
+        </div>
+      </Modal>
+
+      {/* 远程分支管理模态框 */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>🌿</span>
+            <span>远程分支管理</span>
+            <Button 
+              type="link" 
+              size="small" 
+              onClick={fetchBranches}
+              loading={isFetchingBranches}
+            >
+              🔄 刷新
+            </Button>
+          </div>
+        }
+        open={isBranchModalVisible}
+        onCancel={() => setIsBranchModalVisible(false)}
+        width={600}
+        style={{ borderRadius: '12px' }}
+      >
+        <div style={{ padding: '10px 0' }}>
+          {branches.length > 0 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {branches.map(branch => {
+                const isDefault = branch === defaultBranch
+                return (
+                  <div 
+                    key={branch} 
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '6px',
+                      padding: '6px 10px',
+                      backgroundColor: '#fff',
+                      borderRadius: '6px',
+                      border: isDefault ? '1px solid #1890ff' : '1px solid #e8e8e8',
+                      boxShadow: isDefault ? '0 0 0 2px rgba(24, 144, 255, 0.1)' : 'none'
+                    }}
+                  >
+                    <span 
+                      style={{ 
+                        cursor: 'pointer', 
+                        color: '#1890ff', 
+                        textDecoration: 'underline' 
+                      }}
+                      onClick={() => openRenameModal(branch)}
+                    >
+                      {branch}
+                    </span>
+                    {isDefault && (
+                      <span style={{ 
+                        fontSize: '10px', 
+                        padding: '1px 4px', 
+                        borderRadius: '4px',
+                        backgroundColor: '#e6f7ff',
+                        color: '#1890ff'
+                      }}>
+                        默认
+                      </span>
+                    )}
+                    <Button 
+                      type="text" 
+                      size="small" 
+                      onClick={() => handleCheckoutBranch(branch)}
+                    >
+                      切换
+                    </Button>
+                    {!isDefault && (
+                      <Button 
+                        type="text" 
+                        size="small" 
+                        danger
+                        onClick={() => handleDeleteBranch(branch)}
+                      >
+                        ✕
+                      </Button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <p style={{ fontSize: '14px', color: '#999' }}>暂无远程分支</p>
+              <Button 
+                type="default" 
+                size="small"
+                onClick={fetchBranches}
+                loading={isFetchingBranches}
+                style={{ marginTop: '12px', borderRadius: '6px' }}
+              >
+                🔄 刷新分支列表
+              </Button>
+            </div>
+          )}
         </div>
       </Modal>
 
