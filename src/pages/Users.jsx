@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Table, Button, Modal, Form, Input, Select, message, Spin, Result, Card } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UserOutlined, LockOutlined } from '@ant-design/icons'
+import { Table, Button, Modal, Form, Input, Select, message, Spin, Result, Card, Tag } from 'antd'
 import api from '../utils/api'
 
 const { Option } = Select
@@ -142,96 +141,121 @@ function Users() {
     return date.toLocaleString('zh-CN');
   };
 
-  // 根据权限级别获取行的样式
-  const getRowStyle = (record) => {
-    if (record.permissionLevel === 3) {
-      return { backgroundColor: '#f3e5f5' }; // 淡紫色 - 超级管理员
-    } else if (record.permissionLevel === 2) {
-      return { backgroundColor: '#e3f2fd' }; // 淡蓝色 - 管理员
-    } else if (record.permissionLevel === 0) {
-      return { backgroundColor: '#ffebee' }; // 淡红色 - 拉黑用户
+  // 根据权限级别获取权限信息
+  const getPermissionInfo = (level) => {
+    switch (level) {
+      case 3:
+        return { label: '👑 超级管理员', color: 'purple' };
+      case 2:
+        return { label: '🛡️ 管理员', color: 'blue' };
+      case 1:
+        return { label: '👤 普通用户', color: 'green' };
+      case 0:
+        return { label: '🔒 拉黑用户', color: 'red' };
+      default:
+        return { label: '❓ 未知', color: 'default' };
     }
-    return {}; // 普通用户 - 无背景色
   };
 
   // 表格列定义
   const columns = [
     {
-      title: 'ID',
+      title: '🔢 ID',
       dataIndex: 'id',
-      key: 'id'
+      key: 'id',
+      width: 60,
+      align: 'center'
     },
     {
-      title: '用户ID',
+      title: '🆔 用户ID',
       dataIndex: 'userId',
-      key: 'userId'
+      key: 'userId',
+      width: 100,
+      align: 'center'
     },
     {
-      title: '用户名',
+      title: '👤 用户名',
       dataIndex: 'username',
-      key: 'username'
+      key: 'username',
+      width: 120
     },
     {
-      title: '类型',
+      title: '📁 类型',
       dataIndex: 'type',
-      key: 'type'
+      key: 'type',
+      width: 80,
+      align: 'center',
+      render: (type) => <Tag color="cyan">{type || '-'}</Tag>
     },
     {
-      title: '来源ID',
+      title: '🏷️ 来源ID',
       dataIndex: 'fromId',
-      key: 'fromId'
+      key: 'fromId',
+      width: 100,
+      align: 'center'
     },
     {
-      title: '角色',
+      title: '🎭 角色',
       dataIndex: 'role',
-      key: 'role'
+      key: 'role',
+      width: 80,
+      align: 'center',
+      render: (role) => <Tag color="orange">{role || '-'}</Tag>
     },
     {
-      title: '权限级别',
+      title: '⚡ 权限级别',
       dataIndex: 'permissionLevel',
       key: 'permissionLevel',
-      render: (level) => (
-        <span title={level === 3 ? '超级管理员 - 拥有所有权限' : level === 2 ? '管理员 - 拥有所有权限' : level === 1 ? '普通用户 - 拥有基本权限' : '拉黑用户 - 无权限'}>
-          {level === 3 ? '超级管理员' : level === 2 ? '管理员' : level === 1 ? '普通用户' : '拉黑用户'}
-        </span>
-      )
+      width: 140,
+      align: 'center',
+      render: (level) => {
+        const info = getPermissionInfo(level);
+        return (
+          <Tag color={info.color}>
+            {info.label}
+          </Tag>
+        );
+      }
     },
     {
-      title: '创建时间',
+      title: '📅 创建时间',
       dataIndex: 'createTime',
       key: 'createTime',
+      width: 160,
       render: (time) => formatDate(time)
     },
     {
-      title: '操作',
+      title: '⚙️ 操作',
       key: 'action',
+      width: 180,
+      align: 'center',
       render: (_, record) => (
-        <div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
           <Button
-            type="link"
-            icon={<EditOutlined />}
+            size="small"
             onClick={() => openModal(record)}
-            style={{ marginRight: 8 }}
+            style={{ border: 'none', backgroundColor: 'transparent', padding: '4px 8px' }}
+            title="编辑用户"
           >
-            编辑
+            ✏️
           </Button>
           {record.permissionLevel !== 2 && record.permissionLevel !== 3 && (
             <Button
-              type={record.permissionLevel === 0 ? 'link' : 'link'}
-              danger={record.permissionLevel !== 0}
-              onClick={() => handleBlock(record)}
-              style={{ marginRight: 8 }}
-            >
-              {record.permissionLevel === 0 ? '取消拉黑' : '拉黑'}
+            size="small"
+            onClick={() => handleBlock(record)}
+            style={{ border: 'none', backgroundColor: 'transparent', padding: '4px 8px' }}
+            title={record.permissionLevel === 0 ? '取消拉黑' : '拉黑用户'}
+          >
+              {record.permissionLevel === 0 ? '🔒' : '🔓'}
             </Button>
           )}
           <Button
-            type="link"
-            danger
-            icon={<DeleteOutlined />}
+            size="small"
             onClick={() => handleDelete(record.id)}
+            style={{ border: 'none', backgroundColor: 'transparent', padding: '4px 8px' }}
+            title="删除用户"
           >
-            删除
+            🗑️
           </Button>
         </div>
       )
@@ -252,45 +276,60 @@ function Users() {
         />
       ) : (
         <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-            <h2>用户管理</h2>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>
-              添加用户
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: '#1890ff' }}>
+              👥 用户管理 <span style={{ fontSize: '14px', fontWeight: 'normal', color: '#666' }}>· 共 {users.length} 位用户</span>
+            </h2>
+            <Button 
+              type="primary" 
+              onClick={() => openModal()}
+              size="large"
+              style={{ borderRadius: '8px', boxShadow: '0 2px 8px rgba(24, 144, 255, 0.3)' }}
+            >
+              ➕ 添加用户
             </Button>
           </div>
           
-          <Card className="card" style={{ marginBottom: 16, padding: '8px 16px' }} size="small">
+          <Card 
+            className="card" 
+            style={{ 
+              marginBottom: 16, 
+              padding: '12px 20px',
+              borderRadius: '12px',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)'
+            }} 
+            size="small"
+          >
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
               <Input
-                placeholder="用户名"
-                prefix={<UserOutlined />}
+                placeholder="🔍 搜索用户名..."
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
-                style={{ width: 180 }}
-                size="small"
+                style={{ width: 200, borderRadius: '8px' }}
+                size="middle"
                 onPressEnter={fetchUsers}
               />
               <Select
-                placeholder="权限级别"
+                placeholder="⚡ 选择权限"
                 value={searchPermission}
                 onChange={(value) => setSearchPermission(value)}
-                style={{ width: 110 }}
-                size="small"
+                style={{ width: 140, borderRadius: '8px' }}
+                size="middle"
                 allowClear
               >
-                <Option value="3">超级管理员</Option>
-                <Option value="2">管理员</Option>
-                <Option value="1">普通用户</Option>
-                <Option value="0">拉黑用户</Option>
+                <Option value="3">👑 超级管理员</Option>
+                <Option value="2">🛡️ 管理员</Option>
+                <Option value="1">👤 普通用户</Option>
+                <Option value="0">🔒 拉黑用户</Option>
               </Select>
               <Button
                 type="primary"
-                icon={<SearchOutlined />}
                 onClick={fetchUsers}
                 loading={loading}
-                size="small"
+                size="middle"
+                style={{ borderRadius: '8px' }}
               >
-                搜索
+                🔎 搜索
               </Button>
             </div>
           </Card>
@@ -322,72 +361,103 @@ function Users() {
           )}
 
           <Modal
-            title={editingUser ? '编辑用户' : '添加用户'}
+            title={editingUser ? '✏️ 编辑用户' : '➕ 添加用户'}
             open={modalVisible}
             onCancel={closeModal}
             footer={null}
+            width={500}
+            style={{ borderRadius: '12px' }}
           >
             <Form
               form={form}
               layout="vertical"
               onFinish={handleSubmit}
+              style={{ padding: '16px 0' }}
             >
               <Form.Item
                 name="username"
-                label="用户名"
+                label={<span>👤 用户名</span>}
                 rules={[{ required: true, message: '请输入用户名' }]}
               >
-                <Input />
+                <Input placeholder="请输入用户名" style={{ borderRadius: '8px' }} />
               </Form.Item>
 
               <Form.Item
                 name="password"
-                label="密码"
+                label={<span>🔑 密码</span>}
                 rules={[{ required: !editingUser, message: '请输入密码' }]}
               >
-                <Input.Password placeholder={editingUser ? '留空表示不修改密码' : '请输入密码'} />
+                <Input.Password 
+                  placeholder={editingUser ? '留空表示不修改密码' : '请输入密码'} 
+                  style={{ borderRadius: '8px' }}
+                />
               </Form.Item>
 
               <Form.Item
                 name="type"
-                label="类型"
+                label={<span>📁 类型</span>}
               >
-                <Input placeholder="用户类型" disabled={!!editingUser} />
+                <Input 
+                  placeholder="用户类型" 
+                  disabled={!!editingUser} 
+                  style={{ borderRadius: '8px', backgroundColor: '#f5f5f5' }}
+                />
               </Form.Item>
 
               <Form.Item
                 name="fromId"
-                label="来源ID"
+                label={<span>🏷️ 来源ID</span>}
               >
-                <Input placeholder="来源ID" disabled={!!editingUser} />
+                <Input 
+                  placeholder="来源ID" 
+                  disabled={!!editingUser} 
+                  style={{ borderRadius: '8px', backgroundColor: '#f5f5f5' }}
+                />
               </Form.Item>
 
               <Form.Item
                 name="role"
-                label="角色"
+                label={<span>🎭 角色</span>}
               >
-                <Input placeholder="角色" disabled={!!editingUser} />
+                <Select 
+                  placeholder="选择角色" 
+                  disabled={!!editingUser}
+                  style={{ borderRadius: '8px', backgroundColor: '#f5f5f5' }}
+                >
+                  <Option value="user">👤 user</Option>
+                  <Option value="admin">🛡️ admin</Option>
+                </Select>
               </Form.Item>
 
               <Form.Item
                 name="permissionLevel"
-                label="权限级别"
+                label={<span>⚡ 权限级别</span>}
                 rules={[{ required: true, message: '请选择权限级别' }]}
               >
-                <Select placeholder="选择权限级别">
-                  <Option value={1}>普通用户</Option>
-                  <Option value={2}>管理员</Option>
-                  <Option value={3}>超级管理员</Option>
-                  <Option value={0}>拉黑用户</Option>
+                <Select 
+                  placeholder="选择权限级别" 
+                  style={{ borderRadius: '8px' }}
+                >
+                  <Option value={1}>👤 普通用户</Option>
+                  <Option value={2}>🛡️ 管理员</Option>
+                  <Option value={3}>👑 超级管理员</Option>
+                  <Option value={0}>🔒 拉黑用户</Option>
                 </Select>
               </Form.Item>
 
-              <Form.Item style={{ textAlign: 'right' }}>
-                <Button onClick={closeModal} style={{ marginRight: 8 }}>
-                  取消
+              <Form.Item style={{ textAlign: 'right', marginTop: '20px' }}>
+                <Button 
+                  onClick={closeModal} 
+                  style={{ marginRight: 8, borderRadius: '8px' }}
+                >
+                  ❌ 取消
                 </Button>
-                <Button type="primary" htmlType="submit">
-                  {editingUser ? '更新' : '添加'}
+                <Button 
+                  type="primary" 
+                  htmlType="submit"
+                  style={{ borderRadius: '8px' }}
+                >
+                  {editingUser ? '✅ 更新' : '✅ 添加'}
                 </Button>
               </Form.Item>
             </Form>

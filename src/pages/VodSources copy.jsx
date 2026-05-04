@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card, Button, Table, Form, Input, Select, Modal, message, Spin, Alert, Switch, Dropdown, Menu, Tag, Tooltip, InputNumber, Pagination, Tabs } from 'antd'
-import { EditOutlined, ExperimentOutlined, DeleteOutlined, ReloadOutlined, PlusOutlined, MoreOutlined, SearchOutlined, PlayCircleOutlined, LinkOutlined, CloseOutlined } from '@ant-design/icons'
+import { EditOutlined, ExperimentOutlined, DeleteOutlined, ReloadOutlined, PlusOutlined, MoreOutlined, SearchOutlined, PlayCircleOutlined, LinkOutlined } from '@ant-design/icons'
 import api from '../utils/api'
-import Hls from 'hls.js'
 
 const { Option } = Select
 
@@ -37,11 +36,6 @@ const VodSources = () => {
   
   const [movieDetailModalVisible, setMovieDetailModalVisible] = useState(false)
   const [selectedMovie, setSelectedMovie] = useState(null)
-  
-  const [videoPlaying, setVideoPlaying] = useState(false)
-  const [currentVideoUrl, setCurrentVideoUrl] = useState('')
-  const [currentEpisodeName, setCurrentEpisodeName] = useState('')
-  const videoRef = useRef(null)
 
   const fetchVodSources = async (page = 1, pageSize = 20) => {
     setVodSourcesLoading(true)
@@ -76,32 +70,6 @@ const VodSources = () => {
     fetchVodSources()
     fetchCategories()
   }, [])
-
-  useEffect(() => {
-    if (videoPlaying && currentVideoUrl && videoRef.current) {
-      const video = videoRef.current
-      if (Hls.isSupported()) {
-        const hls = new Hls()
-        hls.loadSource(currentVideoUrl)
-        hls.attachMedia(video)
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          video.play().catch(err => console.error('播放失败:', err))
-        })
-        hls.on(Hls.Events.ERROR, (event, data) => {
-          if (data.fatal) {
-            console.error('HLS 错误:', data)
-            message.error('视频加载失败')
-          }
-        })
-        return () => hls.destroy()
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = currentVideoUrl
-        video.addEventListener('loadedmetadata', () => {
-          video.play().catch(err => console.error('播放失败:', err))
-        })
-      }
-    }
-  }, [videoPlaying, currentVideoUrl])
 
   const showVodSourceModal = (record = null) => {
     setEditingVodSource(record)
@@ -204,27 +172,10 @@ const VodSources = () => {
 
   const openMovieDetailModal = (movie) => {
     setSelectedMovie(null)
-    setVideoPlaying(false)
-    setCurrentVideoUrl('')
     setTimeout(() => {
       setSelectedMovie(movie)
       setMovieDetailModalVisible(true)
     }, 10)
-  }
-
-  const playVideo = (url, name) => {
-    setCurrentVideoUrl(url)
-    setCurrentEpisodeName(name || '播放')
-    setVideoPlaying(true)
-  }
-
-  const closeVideo = () => {
-    setVideoPlaying(false)
-    setCurrentVideoUrl('')
-    if (videoRef.current) {
-      videoRef.current.pause()
-      videoRef.current.src = ''
-    }
   }
 
   const handleSpiderSearch = async (vodSourceId, keyword, page = 1, pageSize = 10) => {
@@ -709,6 +660,16 @@ const VodSources = () => {
                         >
                           详情
                         </Button>
+                        {record.playUrl && (
+                          <Button
+                            type="primary"
+                            size="small"
+                            icon={<PlayCircleOutlined />}
+                            onClick={() => window.open(record.playUrl, '_blank')}
+                          >
+                            播放
+                          </Button>
+                        )}
                         {record.downloadUrl && (
                           <Button
                             type="default"
@@ -859,6 +820,16 @@ const VodSources = () => {
                         >
                           详情
                         </Button>
+                        {record.playUrl && (
+                          <Button
+                            type="primary"
+                            size="small"
+                            icon={<PlayCircleOutlined />}
+                            onClick={() => window.open(record.playUrl, '_blank')}
+                          >
+                            播放
+                          </Button>
+                        )}
                         {record.downloadUrl && (
                           <Button
                             type="default"
@@ -916,39 +887,13 @@ const VodSources = () => {
           </div>
         }
         open={movieDetailModalVisible}
-        onCancel={() => {
-          closeVideo()
-          setMovieDetailModalVisible(false)
-        }}
+        onCancel={() => setMovieDetailModalVisible(false)}
         footer={null}
-        width={videoPlaying ? 1000 : 800}
+        width={800}
         style={{ top: '8vh' }}
       >
         {selectedMovie && (
           <div style={{ padding: '20px' }}>
-            {videoPlaying && (
-              <div style={{ marginBottom: '20px', position: 'relative' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <h3 style={{ margin: 0, color: '#333' }}>
-                    <PlayCircleOutlined style={{ marginRight: '8px' }} />
-                    {currentEpisodeName}
-                  </h3>
-                  <Button
-                    type="text"
-                    icon={<CloseOutlined />}
-                    onClick={closeVideo}
-                  />
-                </div>
-                <div style={{ width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: '8px', overflow: 'hidden' }}>
-                  <video
-                    ref={videoRef}
-                    style={{ width: '100%', height: '100%', display: 'block' }}
-                    controls
-                    playsInline
-                  />
-                </div>
-              </div>
-            )}
             <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
               {selectedMovie && selectedMovie.pic && (
                 <div style={{ width: '200px', height: '280px', overflow: 'hidden', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
@@ -1000,6 +945,17 @@ const VodSources = () => {
                   </Tag>
                 </div>
                 <div style={{ marginTop: '20px' }}>
+                  {selectedMovie.playUrl && (
+                    <Button
+                      type="primary"
+                      size="large"
+                      icon={<PlayCircleOutlined />}
+                      onClick={() => window.open(selectedMovie.playUrl, '_blank')}
+                      style={{ marginBottom: '12px', width: '100%' }}
+                    >
+                      立即播放
+                    </Button>
+                  )}
                   {selectedMovie.downloadUrl && (
                     <Button
                       type="default"
@@ -1030,7 +986,7 @@ const VodSources = () => {
                     {selectedMovie.episodes.map((episode, index) => (
                       <button
                         key={index}
-                        onClick={() => playVideo(episode.url, episode.name)}
+                        onClick={() => window.open(episode.url, '_blank')}
                         style={{
                           padding: '8px 16px',
                           background: '#f5f5f5',
@@ -1067,7 +1023,7 @@ const VodSources = () => {
                             {selectedMovie.episodes.slice(i * 18, (i + 1) * 18).map((episode, index) => (
                               <button
                                 key={index}
-                                onClick={() => playVideo(episode.url, episode.name)}
+                                onClick={() => window.open(episode.url, '_blank')}
                                 style={{
                                   padding: '8px 16px',
                                   background: '#f5f5f5',
