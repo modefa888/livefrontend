@@ -42,6 +42,16 @@ const VodSources = () => {
   const [currentVideoUrl, setCurrentVideoUrl] = useState('')
   const [currentEpisodeName, setCurrentEpisodeName] = useState('')
   const videoRef = useRef(null)
+  
+  const [streamSearchModalVisible, setStreamSearchModalVisible] = useState(false)
+  const [streamSearchKeyword, setStreamSearchKeyword] = useState('')
+  const [streamSearchCategory, setStreamSearchCategory] = useState('all')
+  const [streamSearchResults, setStreamSearchResults] = useState([])
+  const [streamSearchLoading, setStreamSearchLoading] = useState(false)
+  const [streamSearchLogs, setStreamSearchLogs] = useState([])
+  const [streamSearchTotal, setStreamSearchTotal] = useState(0)
+  const [streamSearchPagination, setStreamSearchPagination] = useState({ current: 1, pageSize: 10 })
+  const streamSearchEventSourceRef = useRef(null)
 
   const fetchVodSources = async (page = 1, pageSize = 20) => {
     setVodSourcesLoading(true)
@@ -221,10 +231,103 @@ const VodSources = () => {
   const closeVideo = () => {
     setVideoPlaying(false)
     setCurrentVideoUrl('')
+    setCurrentEpisodeName('')
     if (videoRef.current) {
       videoRef.current.pause()
-      videoRef.current.src = ''
+      videoRef.current.removeAttribute('src')
+      videoRef.current.load()
     }
+  }
+
+  const addLog = (type, message) => {
+    const time = new Date().toLocaleTimeString()
+    setStreamSearchLogs(prev => [...prev, { time, type, message }])
+  }
+
+  const handleStreamSearch = async () => {
+    if (!streamSearchKeyword.trim()) {
+      message.warning('请输入搜索关键词')
+      return
+    }
+
+    setStreamSearchLoading(true)
+    setStreamSearchResults([])
+    setStreamSearchLogs([])
+    setStreamSearchTotal(0)
+
+    addLog('info', '开始搜索...')
+
+    try {
+      const token = localStorage.getItem('token')
+      const url = new URL('/api/vod-sources/search/aggregate/stream', window.location.origin)
+      url.searchParams.set('keyword', streamSearchKeyword)
+      if (streamSearchCategory !== 'all') {
+        url.searchParams.set('category', streamSearchCategory)
+      }
+
+      const eventSource = new EventSource(`${url.toString()}&token=${token}`)
+      streamSearchEventSourceRef.current = eventSource
+      let searchEnded = false
+
+      eventSource.addEventListener('data', (event) => {
+        const data = JSON.parse(event.data)
+        addLog('success', `✅ ${data.source} 返回 ${data.count} 条结果`)
+        setStreamSearchResults(prev => [...prev, ...data.list])
+      })
+
+      eventSource.addEventListener('error', (event) => {
+        // 这是自定义error事件（单个源出错），不应该关闭连接
+        try {
+          const data = JSON.parse(event.data)
+          addLog('error', `❌ ${data.source || '错误'}: ${data.message}`)
+        } catch (e) {
+          addLog('error', '连接出错')
+        }
+      })
+
+      eventSource.addEventListener('end', (event) => {
+        searchEnded = true
+        const data = JSON.parse(event.data)
+        setStreamSearchTotal(data.total)
+        addLog('info', `搜索完成，共找到 ${data.total} 条结果，已搜索 ${data.searchedSources} 个资源站`)
+        setStreamSearchLoading(false)
+        eventSource.close()
+      })
+
+      eventSource.onerror = (err) => {
+        // 只有真正的连接错误才处理
+        if (!searchEnded) {
+          addLog('error', '连接出现问题，但仍在尝试接收...')
+          // 不自动关闭连接，让它继续尝试
+        }
+      }
+
+    } catch (error) {
+      console.error('流式搜索失败:', error)
+      message.error('搜索失败')
+      setStreamSearchLoading(false)
+    }
+  }
+
+  const stopStreamSearch = () => {
+    if (streamSearchEventSourceRef.current) {
+      streamSearchEventSourceRef.current.close()
+    }
+    setStreamSearchLoading(false)
+    addLog('info', '搜索已停止')
+  }
+
+  const openStreamSearchModal = () => {
+    setStreamSearchKeyword('')
+    setStreamSearchResults([])
+    setStreamSearchLogs([])
+    setStreamSearchTotal(0)
+    setStreamSearchPagination({ current: 1, pageSize: 10 })
+    setStreamSearchModalVisible(true)
+  }
+
+  const handleStreamSearchPageChange = (page, pageSize) => {
+    setStreamSearchPagination({ current: page, pageSize })
   }
 
   const handleSpiderSearch = async (vodSourceId, keyword, page = 1, pageSize = 10) => {
@@ -290,6 +393,26 @@ const VodSources = () => {
       if (response.data.success) {
         setBatchPingResult(response.data.results)
         message.success('批量测试完成')
+      } else {
+        message.error('批量测试失败')
+      }
+      fetchVodSources(vodSourcesPagination.current, vodSourcesPagination.pageSize)
+    } catch (error) {
+      message.error('批量测试失败')
+    } finally {
+      setBatchPingLoading(false)
+    }
+  }
+
+  const handlePingAll = async () => {
+    setBatchPingLoading(true)
+    try {
+      const response = await api.post('/api/vod-sources/ping/batch')
+      if (response.data.success) {
+        setBatchPingResult(response.data.results)
+        const successCount = response.data.results.filter(r => r.success).length
+        const totalCount = response.data.results.length
+        message.success(`测试完成，成功 ${successCount}/${totalCount}`)
       } else {
         message.error('批量测试失败')
       }
@@ -475,6 +598,20 @@ const VodSources = () => {
                 影视搜索
               </Button>
               <Button
+                onClick={openStreamSearchModal}
+                style={{ borderRadius: '8px' }}
+              >
+                ⚡ 流式搜索
+              </Button>
+              <Button
+                type="default"
+                loading={batchPingLoading}
+                onClick={handlePingAll}
+                style={{ borderRadius: '8px' }}
+              >
+                一键测试延迟
+              </Button>
+              <Button
                 icon={<ReloadOutlined />}
                 onClick={() => fetchVodSources(vodSourcesPagination.current, vodSourcesPagination.pageSize)}
                 style={{ borderRadius: '8px' }}
@@ -504,7 +641,9 @@ const VodSources = () => {
               total: vodSourcesPagination.total,
               showSizeChanger: true,
               showQuickJumper: true,
-              showTotal: (total) => `共 ${total} 条记录`
+              showTotal: (total) => `共 ${total} 条记录`,
+              onChange: (page, pageSize) => fetchVodSources(page, pageSize),
+              onShowSizeChange: (current, size) => fetchVodSources(1, size)
             }}
             rowSelection={{
               type: 'checkbox',
@@ -1100,6 +1239,200 @@ const VodSources = () => {
                 )}
               </div>
             )}
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '20px' }}>⚡</span>
+            <span style={{ fontWeight: 600 }}>流式搜索</span>
+          </div>
+        }
+        open={streamSearchModalVisible}
+        onCancel={() => {
+          if (streamSearchLoading) {
+            stopStreamSearch()
+          }
+          closeVideo()
+          setStreamSearchModalVisible(false)
+        }}
+        footer={null}
+        width={1000}
+        style={{ top: '5vh' }}
+      >
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+            <Select
+              value={streamSearchCategory}
+              onChange={(value) => setStreamSearchCategory(value)}
+              style={{ width: 150 }}
+              size="large"
+            >
+              {categories.map((category) => (
+                <Option key={category} value={category}>
+                  {category === 'all' ? '全部分类' : category}
+                </Option>
+              ))}
+            </Select>
+            <Input
+              placeholder="输入影视名称开始搜索..."
+              value={streamSearchKeyword}
+              onChange={(e) => setStreamSearchKeyword(e.target.value)}
+              onPressEnter={handleStreamSearch}
+              style={{ flex: 1 }}
+              size="large"
+              prefix={<SearchOutlined />}
+              disabled={streamSearchLoading}
+            />
+            {streamSearchLoading ? (
+              <Button
+                type="primary"
+                danger
+                onClick={stopStreamSearch}
+                loading={streamSearchLoading}
+                size="large"
+              >
+                停止
+              </Button>
+            ) : (
+              <Button
+                type="primary"
+                onClick={handleStreamSearch}
+                size="large"
+              >
+                搜索
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {streamSearchLogs.length > 0 && (
+          <div
+            style={{
+              background: '#1e1e1e',
+              color: '#d4d4d4',
+              padding: '12px',
+              borderRadius: '8px',
+              maxHeight: '150px',
+              overflowY: 'auto',
+              fontFamily: 'Consolas, Monaco, monospace',
+              fontSize: '13px',
+              marginBottom: '16px'
+            }}
+          >
+            {streamSearchLogs.map((log, index) => (
+              <div key={index} style={{ marginBottom: '4px' }}>
+                <span style={{ color: '#808080', marginRight: '8px' }}>[{log.time}]</span>
+                <span style={{
+                  color: log.type === 'success' ? '#4ec9b0' : log.type === 'error' ? '#f44747' : '#569cd6'
+                }}>
+                  {log.message}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {streamSearchResults.length > 0 && (
+          <div>
+            <div style={{ marginBottom: '12px', color: '#666' }}>
+              已找到 <span style={{ color: '#1890ff', fontWeight: 600 }}>{streamSearchResults.length}</span> 条结果
+            </div>
+            <Table
+              rowKey={(record, index) => record.title + index}
+              dataSource={streamSearchResults}
+              pagination={{
+                current: streamSearchPagination.current,
+                pageSize: streamSearchPagination.pageSize,
+                total: streamSearchResults.length,
+                showSizeChanger: true,
+                showQuickJumper: true,
+                showTotal: (total) => `共 ${total} 条结果`,
+                onChange: handleStreamSearchPageChange,
+                onShowSizeChange: handleStreamSearchPageChange
+              }}
+              scroll={{ y: 400 }}
+              columns={[
+                {
+                  title: '📺 名称',
+                  dataIndex: 'title',
+                  key: 'title',
+                  ellipsis: true,
+                  width: 200
+                },
+                {
+                  title: '📅 年份',
+                  dataIndex: 'year',
+                  key: 'year',
+                  width: 80,
+                  align: 'center'
+                },
+                {
+                  title: '🎬 类型',
+                  dataIndex: 'type',
+                  key: 'type',
+                  width: 100,
+                  align: 'center',
+                  render: (type) => type ? <Tag color="blue">{type}</Tag> : '-'
+                },
+                {
+                  title: '🔗 来源',
+                  dataIndex: 'sourceName',
+                  key: 'sourceName',
+                  width: 120,
+                  ellipsis: true,
+                  render: (name) => <Tag color="purple">{name}</Tag>
+                },
+                {
+                  title: '📝 简介',
+                  dataIndex: 'desc',
+                  key: 'desc',
+                  ellipsis: true,
+                  render: (desc, record) => (
+                    <span
+                      style={{ cursor: 'pointer', color: '#1890ff' }}
+                      onClick={() => {
+                        setSelectedMovie(record)
+                        setMovieDetailModalVisible(true)
+                      }}
+                    >
+                      {desc || '点击查看详情'}
+                    </span>
+                  )
+                },
+                {
+                  title: '🔗 操作',
+                  key: 'action',
+                  width: 100,
+                  align: 'center',
+                  render: (_, record) => (
+                    <Button
+                      type="default"
+                      size="small"
+                      onClick={() => {
+                        setSelectedMovie(record)
+                        setMovieDetailModalVisible(true)
+                      }}
+                    >
+                      详情
+                    </Button>
+                  )
+                }
+              ]}
+            />
+          </div>
+        )}
+
+        {!streamSearchLoading && streamSearchResults.length === 0 && streamSearchLogs.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '60px 0' }}>
+            <Alert
+              message="开始搜索"
+              description="输入关键词，点击搜索按钮开始流式搜索"
+              type="info"
+              showIcon
+            />
           </div>
         )}
       </Modal>

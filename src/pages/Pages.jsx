@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Table, Button, Modal, Form, Input, Switch, message, Space, Tag, Tooltip, Tabs } from 'antd'
+import { Table, Button, Modal, Form, Input, Switch, message, Space, Tag, Tooltip, Tabs, Spin } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons'
 import api from '../utils/api'
 import Editor from '@monaco-editor/react'
@@ -12,9 +12,9 @@ function Pages() {
   const [modalVisible, setModalVisible] = useState(false)
   const [confirmLoading, setConfirmLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(null)
+  const [fetchingPage, setFetchingPage] = useState(false)
   const [form] = Form.useForm()
 
-  // 获取页面列表
   const fetchPages = async () => {
     setLoading(true)
     try {
@@ -31,40 +31,43 @@ function Pages() {
     fetchPages()
   }, [])
 
-  // 打开创建/编辑模态框
-  const openModal = (page = null) => {
+  const openModal = async (page = null) => {
     setCurrentPage(page)
     if (page) {
-      form.setFieldsValue({
-        title: page.title,
-        path: page.path,
-        content: page.content,
-        require_login: page.require_login,
-        status: page.status
-      })
+      setFetchingPage(true)
+      try {
+        const response = await api.get(`/api/pages/${page.id}`)
+        form.setFieldsValue({
+          title: response.data.page.title,
+          path: response.data.page.path,
+          content: response.data.page.content,
+          require_login: response.data.page.require_login,
+          status: response.data.page.status
+        })
+      } catch (error) {
+        message.error('获取页面详情失败')
+      } finally {
+        setFetchingPage(false)
+      }
     } else {
       form.resetFields()
     }
     setModalVisible(true)
   }
 
-  // 关闭模态框
   const closeModal = () => {
     setModalVisible(false)
     setCurrentPage(null)
     form.resetFields()
   }
 
-  // 提交表单
   const handleSubmit = async (values) => {
     setConfirmLoading(true)
     try {
       if (currentPage) {
-        // 更新页面
         await api.put(`/api/pages/${currentPage.id}`, values)
         message.success('页面更新成功')
       } else {
-        // 创建页面
         await api.post('/api/pages', values)
         message.success('页面创建成功')
       }
@@ -77,7 +80,6 @@ function Pages() {
     }
   }
 
-  // 删除页面
   const handleDelete = (id, title) => {
     Modal.confirm({
       title: '确认删除',
@@ -96,7 +98,6 @@ function Pages() {
     })
   }
 
-  // 表格列定义
   const columns = [
     {
       title: 'ID',
@@ -120,6 +121,13 @@ function Pages() {
           /v/{text}
         </a>
       )
+    },
+    {
+      title: '文件路径',
+      dataIndex: 'content',
+      key: 'content',
+      ellipsis: true,
+      render: (text) => <Tag color="blue">{text}</Tag>
     },
     {
       title: '是否需要登录',
@@ -231,72 +239,77 @@ function Pages() {
         confirmLoading={confirmLoading}
         onCancel={closeModal}
         width={1000}
-        height={600}
         style={{ top: 20 }}
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleSubmit}
-        >
-          <Tabs defaultActiveKey="basic">
-            <TabPane tab="基础信息" key="basic">
-              <Form.Item
-                name="title"
-                label="页面标题"
-                rules={[{ required: true, message: '请输入页面标题' }]}
-              >
-                <Input placeholder="请输入页面标题" />
-              </Form.Item>
+        {fetchingPage ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
+            <Spin size="large" />
+          </div>
+        ) : (
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handleSubmit}
+          >
+            <Tabs defaultActiveKey="basic">
+              <TabPane tab="基础信息" key="basic">
+                <Form.Item
+                  name="title"
+                  label="页面标题"
+                  rules={[{ required: true, message: '请输入页面标题' }]}
+                >
+                  <Input placeholder="请输入页面标题" />
+                </Form.Item>
 
-              <Form.Item
-                name="path"
-                label="页面路径"
-                rules={[{ required: true, message: '请输入页面路径' }]}
-              >
-                <Input placeholder="请输入页面路径，例如：about" />
-              </Form.Item>
+                <Form.Item
+                  name="path"
+                  label="页面路径"
+                  rules={[{ required: true, message: '请输入页面路径' }]}
+                >
+                  <Input placeholder="请输入页面路径，例如：about" />
+                </Form.Item>
 
-              <Form.Item
-                name="require_login"
-                label="是否需要登录"
-                valuePropName="checked"
-              >
-                <Switch />
-              </Form.Item>
+                <Form.Item
+                  name="require_login"
+                  label="是否需要登录"
+                  valuePropName="checked"
+                >
+                  <Switch />
+                </Form.Item>
 
-              <Form.Item
-                name="status"
-                label="页面状态"
-                valuePropName="checked"
-              >
-                <Switch defaultChecked />
-              </Form.Item>
-            </TabPane>
-            <TabPane tab="页面内容" key="content">
-              <Form.Item
-                name="content"
-                label="页面内容"
-                rules={[{ required: true, message: '请输入页面内容' }]}
-                valuePropName="value"
-                getValueFromEvent={(value) => value}
-              >
-                <Editor
-                  height="500px"
-                  language="html"
-                  theme="vs-dark"
-                  options={{
-                    minimap: { enabled: true },
-                    fontSize: 14,
-                    lineNumbers: 'on',
-                    scrollBeyondLastLine: false,
-                    automaticLayout: true
-                  }}
-                />
-              </Form.Item>
-            </TabPane>
-          </Tabs>
-        </Form>
+                <Form.Item
+                  name="status"
+                  label="页面状态"
+                  valuePropName="checked"
+                >
+                  <Switch defaultChecked />
+                </Form.Item>
+              </TabPane>
+              <TabPane tab="页面内容" key="content">
+                <Form.Item
+                  name="content"
+                  label="页面内容"
+                  rules={[{ required: true, message: '请输入页面内容' }]}
+                  valuePropName="value"
+                  getValueFromEvent={(value) => value}
+                >
+                  <Editor
+                    height="500px"
+                    language="html"
+                    theme="vs-dark"
+                    options={{
+                      minimap: { enabled: true },
+                      fontSize: 14,
+                      lineNumbers: 'on',
+                      scrollBeyondLastLine: false,
+                      automaticLayout: true
+                    }}
+                  />
+                </Form.Item>
+              </TabPane>
+            </Tabs>
+          </Form>
+        )}
       </Modal>
     </div>
   )
