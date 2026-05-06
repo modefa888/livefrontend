@@ -1080,7 +1080,9 @@ const FaBuBot = () => {
   const startSingleBot = async (botName) => {
     try {
       await api.post(`/api/bot/botguard/start/${botName}`)
-      message.success(`${botName === 'fabubot' ? 'FaBuBot' : 'LiveBot'} 启动成功`)
+      // 启动后自动启用自动重启，加入守护服务
+      await api.post(`/api/bot/botguard/autorestart/${botName}`, { enabled: true })
+      message.success(`${botName === 'fabubot' ? 'FaBuBot' : 'LiveBot'} 启动成功并加入守护服务`)
       fetchBotGuardStatus()
     } catch (error) {
       message.error('启动机器人失败')
@@ -1091,7 +1093,9 @@ const FaBuBot = () => {
   const stopSingleBot = async (botName) => {
     try {
       await api.post(`/api/bot/botguard/stop/${botName}`)
-      message.success(`${botName === 'fabubot' ? 'FaBuBot' : 'LiveBot'} 停止成功`)
+      // 停止后自动禁用自动重启，从守护服务剔除
+      await api.post(`/api/bot/botguard/autorestart/${botName}`, { enabled: false })
+      message.success(`${botName === 'fabubot' ? 'FaBuBot' : 'LiveBot'} 已停止并从守护服务中剔除`)
       fetchBotGuardStatus()
     } catch (error) {
       message.error('停止机器人失败')

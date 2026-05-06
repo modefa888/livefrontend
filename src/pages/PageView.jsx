@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { Spin, Alert, message } from 'antd'
-import api from '../utils/api'
+import api, { BASE_URL } from '../utils/api'
 
 function PageView() {
   const { path } = useParams()
@@ -29,7 +29,7 @@ function PageView() {
         
         // 1. 检查数据库content是否是html文件名
         if (pageData.content && pageData.content.endsWith('.html')) {
-          const testUrl = `/api/html/${pageData.content}`
+          const testUrl = `${BASE_URL}/api/html/${pageData.content}`
           try {
             const testResponse = await fetch(testUrl)
             if (testResponse.ok) {
@@ -42,7 +42,7 @@ function PageView() {
         
         // 2. 如果上面没找到，检查 /api/html/${path}.html
         if (!staticUrl) {
-          const testUrl = `/api/html/${path}.html`
+          const testUrl = `${BASE_URL}/api/html/${path}.html`
           try {
             const testResponse = await fetch(testUrl)
             if (testResponse.ok) {

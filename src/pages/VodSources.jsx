@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Card, Button, Table, Form, Input, Select, Modal, message, Spin, Alert, Switch, Dropdown, Menu, Tag, Tooltip, InputNumber, Pagination, Tabs } from 'antd'
 import { EditOutlined, ExperimentOutlined, DeleteOutlined, ReloadOutlined, PlusOutlined, MoreOutlined, SearchOutlined, PlayCircleOutlined, LinkOutlined, CloseOutlined } from '@ant-design/icons'
-import api from '../utils/api'
+import api, { BASE_URL } from '../utils/api'
 import Hls from 'hls.js'
 
 const { Option } = Select
@@ -259,7 +259,8 @@ const VodSources = () => {
 
     try {
       const token = localStorage.getItem('token')
-      const url = new URL('/api/vod-sources/search/aggregate/stream', window.location.origin)
+      const baseUrl = BASE_URL || window.location.origin
+      const url = new URL('/api/vod-sources/search/aggregate/stream', baseUrl)
       url.searchParams.set('keyword', streamSearchKeyword)
       if (streamSearchCategory !== 'all') {
         url.searchParams.set('category', streamSearchCategory)

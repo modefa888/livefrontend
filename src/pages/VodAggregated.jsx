@@ -31,7 +31,7 @@ import {
   AppstoreOutlined,
   TableOutlined
 } from '@ant-design/icons'
-import api from '../utils/api'
+import api, { BASE_URL } from '../utils/api'
 import Hls from 'hls.js'
 
 const { Search } = Input
@@ -47,12 +47,6 @@ const VodAggregated = () => {
   const [pingProgress, setPingProgress] = useState(0)
   const [pingResults, setPingResults] = useState([])
   
-  // 搜索相关状态
-  const [searchKeyword, setSearchKeyword] = useState('')
-  const [searchCategory, setSearchCategory] = useState('all')
-  const [searching, setSearching] = useState(false)
-  const [searchResults, setSearchResults] = useState([])
-  const [searchModalVisible, setSearchModalVisible] = useState(false)
   const [selectedMovie, setSelectedMovie] = useState(null)
   const [movieDetailModalVisible, setMovieDetailModalVisible] = useState(false)
   
@@ -177,18 +171,37 @@ const VodAggregated = () => {
     }
   }
 
-  // 批量测试延迟
+  // 批量测试延迟 - 使用 SSE 流
   const testAllPings = async () => {
     setPinging(true)
     setPingProgress(0)
     setPingResults([])
     
     try {
-      const response = await api.post('/api/vod-aggregated/ping/batch')
-      if (response.data.success) {
-        const successCount = response.data.results.filter(r => r.success).length
-        const totalCount = response.data.results.length
-        setPingResults(response.data.results)
+      const token = localStorage.getItem('token')
+      const baseUrl = BASE_URL || window.location.origin
+      const url = new URL('/api/vod-aggregated/ping/batch', baseUrl)
+      
+      const eventSource = new EventSource(`${url.toString()}?token=${token}`, { withCredentials: true })
+      let results = []
+      
+      eventSource.addEventListener('start', (event) => {
+        const data = JSON.parse(event.data)
+        console.log('开始测试，共', data.total, '个资源')
+      })
+      
+      eventSource.addEventListener('progress', (event) => {
+        const data = JSON.parse(event.data)
+        setPingProgress(data.percent)
+        results.push(data.result)
+        setPingResults([...results])
+      })
+      
+      eventSource.addEventListener('end', (event) => {
+        const data = JSON.parse(event.data)
+        eventSource.close()
+        const successCount = data.results.filter(r => r.success).length
+        const totalCount = data.results.length
         message.success(`测试完成! 成功: ${successCount}/${totalCount}`)
         
         // 刷新数据
@@ -197,48 +210,97 @@ const VodAggregated = () => {
         } else {
           fetchDomainGroups()
         }
+        
+        setPinging(false)
+      })
+      
+      eventSource.addEventListener('error', (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          message.error(data.message || '批量测试失败')
+        } catch (e) {
+          // 忽略连接关闭时的错误
+        }
+        eventSource.close()
+        setPinging(false)
+      })
+      
+      // 因为 EventSource 默认是 GET，但我们的接口是 POST，我们需要用 fetch 来发送 POST 请求并解析 SSE 流！
+      // 让我修正方法！不使用 EventSource，而是用 fetch！
+      eventSource.close()
+      
+      // 使用 fetch 发送 POST 请求并解析 SSE 流
+      const response = await fetch(`${baseUrl}/api/vod-aggregated/ping/batch`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error('请求失败')
+      }
+      
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() // 保留最后一行（可能不完整）
+        
+        let currentEvent = null
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim()
+          } else if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6).trim())
+              if (currentEvent === 'start') {
+                console.log('开始测试，共', data.total, '个资源')
+              } else if (currentEvent === 'progress') {
+                setPingProgress(data.percent)
+                results.push(data.result)
+                setPingResults([...results])
+              } else if (currentEvent === 'end') {
+                const successCount = data.results.filter(r => r.success).length
+                const totalCount = data.results.length
+                message.success(`测试完成! 成功: ${successCount}/${totalCount}`)
+                
+                // 刷新数据
+                if (vodViewType === 'aggregated') {
+                  fetchAggregatedVodSources(50)
+                } else {
+                  fetchDomainGroups()
+                }
+                
+                setPinging(false)
+              } else if (currentEvent === 'error') {
+                message.error(data.message || '批量测试失败')
+                setPinging(false)
+              }
+            } catch (e) {
+              console.error('解析事件失败:', e)
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('批量测试失败:', error)
       message.error('批量测试失败')
-    } finally {
       setPinging(false)
       setPingProgress(100)
     }
   }
 
-  // 聚合搜索
-  const handleAggregateSearch = async () => {
-    if (!searchKeyword.trim()) {
-      message.warning('请输入搜索关键词')
-      return
-    }
-
-    setSearching(true)
-    try {
-      const response = await api.get('/api/vod-aggregated/search/aggregate', {
-        params: {
-          keyword: searchKeyword,
-          category: searchCategory
-        }
-      })
-
-      if (response.data.success) {
-        setSearchResults(response.data.list || [])
-        setSearchModalVisible(true)
-        message.success(`找到 ${response.data.total} 个结果`)
-      }
-    } catch (error) {
-      console.error('聚合搜索失败:', error)
-      message.error('聚合搜索失败')
-    } finally {
-      setSearching(false)
-    }
-  }
 
   // 打开电影详情
   const openMovieDetail = (movie) => {
-    setSelectedEpisode(null)
     setSelectedMovie(movie)
     setTimeout(() => {
       setMovieDetailModalVisible(true)
@@ -251,6 +313,7 @@ const VodAggregated = () => {
     setStreamSearchLogs(prev => [...prev, { time, type, message }])
   }
 
+  // 聚合流式搜索
   const handleStreamSearch = async () => {
     if (!streamSearchKeyword.trim()) {
       message.warning('请输入搜索关键词')
@@ -266,7 +329,9 @@ const VodAggregated = () => {
 
     try {
       const token = localStorage.getItem('token')
-      const url = new URL('/api/vod-aggregated/search/aggregate/stream', window.location.origin)
+      // 使用配置的后端地址构建 URL
+      const baseUrl = BASE_URL || window.location.origin
+      const url = new URL('/api/vod-aggregated/search/aggregate/stream', baseUrl)
       url.searchParams.set('keyword', streamSearchKeyword)
       if (streamSearchCategory !== 'all') {
         url.searchParams.set('category', streamSearchCategory)
@@ -455,65 +520,6 @@ const VodAggregated = () => {
     }
   ]
 
-  // 搜索结果表格列
-  const searchColumns = [
-    {
-      title: '封面',
-      dataIndex: 'pic',
-      key: 'pic',
-      width: 100,
-      render: (pic) => (
-        <Image
-          width={60}
-          height={80}
-          src={pic || 'https://via.placeholder.com/60x80?text=No+Image'}
-          style={{ objectFit: 'cover', borderRadius: '4px' }}
-          preview={false}
-        />
-      )
-    },
-    {
-      title: '标题',
-      dataIndex: 'title',
-      key: 'title',
-      width: 250,
-      ellipsis: true
-    },
-    {
-      title: '年份',
-      dataIndex: 'year',
-      key: 'year',
-      width: 80
-    },
-    {
-      title: '类型',
-      dataIndex: 'type',
-      key: 'type',
-      width: 100
-    },
-    {
-      title: '来源',
-      dataIndex: 'sourceName',
-      key: 'sourceName',
-      width: 120,
-      render: (name) => <Tag color="blue">{name}</Tag>
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 150,
-      render: (_, record) => (
-        <Button
-          type="primary"
-          icon={<PlayCircleOutlined />}
-          onClick={() => openMovieDetail(record)}
-        >
-          查看详情
-        </Button>
-      )
-    }
-  ]
-
   return (
     <div style={{ padding: '20px' }}>
 
@@ -676,36 +682,6 @@ const VodAggregated = () => {
           )}
         </Card>
       </Spin>
-
-      {/* 搜索结果模态框 */}
-      <Modal
-        title={
-          <Space>
-            <SearchOutlined />
-            <span>聚合搜索结果</span>
-            <Tag color="blue">{searchResults.length} 个结果</Tag>
-          </Space>
-        }
-        open={searchModalVisible}
-        onCancel={() => setSearchModalVisible(false)}
-        width={1000}
-        footer={[
-          <Button key="close" onClick={() => setSearchModalVisible(false)}>
-            关闭
-          </Button>
-        ]}
-      >
-        <Table
-          rowKey="uniqueId"
-          dataSource={searchResults}
-          columns={searchColumns}
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showTotal: (total) => `共 ${total} 个结果`
-          }}
-        />
-      </Modal>
 
       {/* 电影详情模态框 */}
       <Modal

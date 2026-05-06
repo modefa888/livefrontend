@@ -1,7 +1,9 @@
 import axios from 'axios'
 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '',
+  baseURL: BASE_URL,
   timeout: 30000
 })
 
@@ -30,4 +32,5 @@ api.interceptors.response.use(
 )
 
 export default api
+export { BASE_URL }
 
